@@ -14,7 +14,12 @@ import { DROP_PREFIX, PICK_PREFIX } from "../rehearsals.js";
 import { CANCEL_MODAL_ID, handleCancel, handleCancelSubmit } from "./cancel.js";
 import { handleDecisionButton } from "./decision.js";
 import { handleNext } from "./next.js";
-import { handleRehearsal, handleRehearsalComponent, REHEARSAL_PREFIX } from "./rehearsal.js";
+import {
+  handleRehearsal,
+  handleRehearsalComponent,
+  handleRehearsalModal,
+  REHEARSAL_PREFIX,
+} from "./rehearsal.js";
 import { handleRsvp } from "./rsvp.js";
 
 export const naviCommand = new SlashCommandBuilder()
@@ -54,13 +59,15 @@ export async function handleNaviCommand(interaction: ChatInputCommandInteraction
 }
 
 export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
-  if (interaction.customId !== CANCEL_MODAL_ID) return;
+  const id = interaction.customId;
+  if (id !== CANCEL_MODAL_ID && !id.startsWith(REHEARSAL_PREFIX)) return;
   // Re-check: the modal could outlive a role change.
   if (!isAdmin(interaction)) {
     await interaction.reply({ content: say("notAllowed"), flags: MessageFlags.Ephemeral });
     return;
   }
-  return handleCancelSubmit(interaction);
+  if (id === CANCEL_MODAL_ID) return handleCancelSubmit(interaction);
+  return handleRehearsalModal(interaction);
 }
 
 // Buttons and select menus. The rehearsal panel is ephemeral, so only its admin sees it.

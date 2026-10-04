@@ -3,11 +3,16 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type ChatInputCommandInteraction,
+  LabelBuilder,
   MessageFlags,
   type MessageActionRowComponentBuilder,
   type MessageComponentInteraction,
+  ModalBuilder,
+  type ModalSubmitInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from "discord.js";
 import { config } from "../config.js";
 import { say } from "../copy.js";
@@ -16,9 +21,11 @@ import { pollOptions, rehearsalPolls, scheduledJobs } from "../db/schema.js";
 import {
   addDays,
   dayLabel,
+  formatClockRange,
   formatMinutes,
   formatWindow,
   parseMinutes,
+  parseTimeRange,
   zonedDate,
   zonedToUtc,
 } from "../time.js";
@@ -30,10 +37,12 @@ export const POLL_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣
 export const REHEARSAL_PREFIX = "navi-reh:";
 
 const PICKER_DAYS = 25; // select menus hold at most 25 options
-const SHIFT_MINUTES = 60;
-const LENGTH_STEP_MINUTES = 30;
+// Preset windows in the time dropdown: default length, starting 10 AM through 6 PM.
+const PRESET_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
+const CUSTOM_TIME = "custom";
+const TIME_INPUT_ID = "time";
 const MIN_LENGTH_MINUTES = 60;
-const MAX_LENGTH_MINUTES = 6 * 60;
+const MAX_LENGTH_MINUTES = 8 * 60;
 const DRAFT_TTL_MS = 30 * 60_000;
 
 interface DayWindow {
@@ -125,33 +134,80 @@ function render(draftId: string, draft: Draft) {
         ),
       );
     rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(editSelect));
-
-    const button = (action: string, label: string) =>
-      new ButtonBuilder().setCustomId(id(action)).setLabel(label).setStyle(ButtonStyle.Secondary);
-    rows.push(
-      new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        button("earlier", "◀ 1 hr"),
-        button("later", "1 hr ▶"),
-        button("shorter", "− 30 min"),
-        button("longer", "+ 30 min"),
-        button("all", "Use for all days"),
-      ),
-    );
+    rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(timeSelect(id, draft)));
   }
 
-  rows.push(
-    new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(id("submit"))
-        .setLabel("Send poll")
-        .setEmoji("🧚")
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(!hasDays),
-      new ButtonBuilder().setCustomId(id("discard")).setLabel("Discard").setStyle(ButtonStyle.Secondary),
-    ),
-  );
+  const buttons = [
+    new ButtonBuilder()
+      .setCustomId(id("submit"))
+      .setLabel("Send poll")
+      .setEmoji("🧚")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!hasDays),
+  ];
+  if (days.length > 1) {
+    buttons.push(
+      new ButtonBuilder().setCustomId(id("all")).setLabel("Use this time for all days").setStyle(ButtonStyle.Secondary),
+    );
+  }
+  buttons.push(new ButtonBuilder().setCustomId(id("discard")).setLabel("Discard").setStyle(ButtonStyle.Secondary));
+  rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(buttons));
 
   return { content, components: rows };
+}
+
+const windowValue = (w: DayWindow) => `${w.start}-${w.length}`;
+
+// Preset windows, plus the day's current time if it was typed in, plus "Custom…".
+function timeSelect(id: (action: string) => string, draft: Draft) {
+  const current = draft.editing ? draft.days.get(draft.editing) : undefined;
+  const length = config.rehearsal.defaultHours * 60;
+  const presets: DayWindow[] = PRESET_START_HOURS.map((h) => ({ start: h * 60, length }));
+  const isCurrent = (w: DayWindow) => !!current && w.start === current.start && w.length === current.length;
+
+  const options = presets.map((w) =>
+    new StringSelectMenuOptionBuilder()
+      .setValue(windowValue(w))
+      .setLabel(formatClockRange(w.start, w.length))
+      .setDefault(isCurrent(w)),
+  );
+  if (current && !presets.some(isCurrent)) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setValue(windowValue(current))
+        .setLabel(formatClockRange(current.start, current.length))
+        .setDescription("Custom time")
+        .setDefault(true),
+    );
+  }
+  options.push(
+    new StringSelectMenuOptionBuilder()
+      .setValue(CUSTOM_TIME)
+      .setLabel("Custom…")
+      .setDescription("Type any time, e.g. 1:30-4:30pm")
+      .setEmoji("✏️"),
+  );
+
+  return new StringSelectMenuBuilder().setCustomId(id("time")).setPlaceholder("Time").addOptions(options);
+}
+
+function customTimeModal(draftId: string, date: string, current: DayWindow) {
+  return new ModalBuilder()
+    .setCustomId(`${REHEARSAL_PREFIX}${draftId}:custom`)
+    .setTitle(`Rehearsal time: ${dayLabel(date)}`)
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Start and end time")
+        .setDescription("e.g. 2-5pm, 1:30-4:30pm, 11am-2pm or 18:00-21:00")
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(TIME_INPUT_ID)
+            .setStyle(TextInputStyle.Short)
+            .setValue(formatClockRange(current.start, current.length))
+            .setMaxLength(40)
+            .setRequired(true),
+        ),
+    );
 }
 
 export async function handleRehearsal(interaction: ChatInputCommandInteraction) {
@@ -204,26 +260,17 @@ export async function handleRehearsalComponent(interaction: MessageComponentInte
       if (!interaction.isStringSelectMenu()) return;
       draft.editing = interaction.values[0] ?? draft.editing;
       break;
-    case "earlier":
-      if (editing && editing.start - SHIFT_MINUTES >= 0) editing.start -= SHIFT_MINUTES;
-      break;
-    case "later":
-      if (editing && editing.start + SHIFT_MINUTES + editing.length <= 24 * 60) editing.start += SHIFT_MINUTES;
-      break;
-    case "shorter":
-      if (editing && editing.length - LENGTH_STEP_MINUTES >= MIN_LENGTH_MINUTES) {
-        editing.length -= LENGTH_STEP_MINUTES;
+    case "time": {
+      if (!interaction.isStringSelectMenu() || !draft.editing || !editing) return;
+      const value = interaction.values[0];
+      if (value === CUSTOM_TIME) {
+        await interaction.showModal(customTimeModal(draftId, draft.editing, editing));
+        return;
       }
+      const [start, length] = value.split("-").map(Number);
+      draft.days.set(draft.editing, { start, length });
       break;
-    case "longer":
-      if (
-        editing &&
-        editing.length + LENGTH_STEP_MINUTES <= MAX_LENGTH_MINUTES &&
-        editing.start + editing.length + LENGTH_STEP_MINUTES <= 24 * 60
-      ) {
-        editing.length += LENGTH_STEP_MINUTES;
-      }
-      break;
+    }
     case "all":
       if (editing) for (const date of draft.days.keys()) draft.days.set(date, { ...editing });
       break;
@@ -235,6 +282,31 @@ export async function handleRehearsalComponent(interaction: MessageComponentInte
       return submit(interaction, draftId, draft);
   }
 
+  await interaction.update(render(draftId, draft));
+}
+
+// The "Custom…" time pop-up was submitted. It was opened from the panel, so update the panel.
+export async function handleRehearsalModal(interaction: ModalSubmitInteraction) {
+  if (!interaction.isFromMessage()) return;
+  const [, draftId] = interaction.customId.split(":");
+  const draft = drafts.get(draftId);
+  if (!draft || Date.now() - draft.touchedAt > DRAFT_TTL_MS) {
+    drafts.delete(draftId);
+    await interaction.update({ content: say("panelExpired"), components: [] });
+    return;
+  }
+  draft.touchedAt = Date.now();
+  draft.warning = null;
+
+  const text = interaction.fields.getTextInputValue(TIME_INPUT_ID).trim();
+  const parsed = parseTimeRange(text);
+  if (!parsed) {
+    draft.warning = `**Hey!** I couldn't read "${text}" as a time. Try something like \`1:30-4:30pm\`.`;
+  } else if (parsed.length < MIN_LENGTH_MINUTES || parsed.length > MAX_LENGTH_MINUTES) {
+    draft.warning = `**Watch out!** Rehearsals need to be ${MIN_LENGTH_MINUTES / 60}–${MAX_LENGTH_MINUTES / 60} hours long.`;
+  } else if (draft.editing && draft.days.has(draft.editing)) {
+    draft.days.set(draft.editing, parsed);
+  }
   await interaction.update(render(draftId, draft));
 }
 
