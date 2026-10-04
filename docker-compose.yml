@@ -1,3 +1,7 @@
+# Fixed project name so the CLI, scripts/update.sh and Unraid's Compose Manager
+# all manage the same stack (otherwise the CLI would name it after the folder).
+name: navi
+
 services:
   navi:
     build: .

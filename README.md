@@ -223,13 +223,22 @@ docker compose up -d --build
 docker compose logs -f navi     # look for "Hey! Listen! Logged in as Navi#1234"
 ```
 
-If you use Compose Manager, add a stack whose path points at `/mnt/user/appdata/navi/repo` so it shows up in the Docker tab.
+If you use Compose Manager, add a stack named `navi` so it shows up in the Docker tab. Set **Compose Source** to **External folder** → `/mnt/user/appdata/navi/repo`, and **External ENV File Path** to `/mnt/user/appdata/navi/repo/.env`. The compose file sets `name: navi`, so the stack started from the command line and the one in Compose Manager are the same.
 
 **Updating** after pushing changes:
 
 ```bash
 bash /mnt/user/appdata/navi/repo/scripts/update.sh
 ```
+
+**Auto-update on push.** `scripts/auto-update.sh` checks GitHub and runs `update.sh` only when `main` has new commits. To schedule it, open **Settings → User Scripts → Add New Script** (install the User Scripts plugin from Apps if it's missing). Name the script `navi-auto-update` and set its contents to:
+
+```bash
+#!/bin/bash
+bash /mnt/user/appdata/navi/repo/scripts/auto-update.sh
+```
+
+Set the schedule to **Custom** with `*/5 * * * *` (every 5 minutes). Each push goes live within about 5 minutes. When nothing has changed, the script does nothing and prints nothing.
 
 **Notes**
 - Postgres data lives in `DATA_DIR` (under appdata), so it's included in Unraid's appdata backups. `.env` stays on the server and is never committed.
