@@ -5,7 +5,7 @@ import { scheduledJobs } from "./db/schema.js";
 import { closePoll, sendReminder } from "./rehearsals.js";
 
 type Job = typeof scheduledJobs.$inferSelect;
-type JobHandler = (client: Client, job: Job) => Promise<void>;
+type JobHandler = (client: Client, job: Job) => Promise<unknown>;
 
 const MAX_ATTEMPTS = 5;
 const TICK_MS = 60_000;

@@ -12,6 +12,7 @@ import { say } from "../copy.js";
 import { isAdmin } from "../permissions.js";
 import { DROP_PREFIX, PICK_PREFIX } from "../rehearsals.js";
 import { CANCEL_MODAL_ID, handleCancel, handleCancelSubmit } from "./cancel.js";
+import { handleDebugSendReminders, REMINDER_OPTION } from "./debug.js";
 import { handleDecisionButton } from "./decision.js";
 import { handleNext } from "./next.js";
 import {
@@ -34,6 +35,20 @@ export const naviCommand = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s.setName("rsvp").setDescription("Get reminders for the next rehearsal"),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName("debug-send-reminders")
+      .setDescription("Send reminder DMs now for upcoming rehearsals (admin)")
+      .addStringOption((o) =>
+        o
+          .setName(REMINDER_OPTION)
+          .setDescription("Which reminder to send (default: 48-hour)")
+          .addChoices(
+            { name: "48-hour reminder", value: "remindBefore" },
+            { name: "Day-of reminder", value: "remindDayOf" },
+          ),
+      ),
   );
 
 const adminSubcommands = new Set(["rehearsal", "cancel"]);
@@ -55,6 +70,8 @@ export async function handleNaviCommand(interaction: ChatInputCommandInteraction
       return handleCancel(interaction);
     case "rsvp":
       return handleRsvp(interaction);
+    case "debug-send-reminders":
+      return handleDebugSendReminders(interaction);
   }
 }
 

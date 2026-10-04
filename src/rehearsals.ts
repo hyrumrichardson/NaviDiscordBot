@@ -71,12 +71,13 @@ async function postInPollChannel(
 
 // DM each user. Anyone whose DMs are closed gets one shared channel post that mentions them.
 // Never throws for a single user, so a retried job doesn't DM everyone twice.
+// Returns the IDs that couldn't be DMed.
 export async function dmOrMention(
   client: Client,
   userIds: string[],
   message: BaseMessageOptions,
   channelId: string | null,
-) {
+): Promise<string[]> {
   const failed: string[] = [];
   for (const userId of userIds) {
     try {
@@ -86,12 +87,12 @@ export async function dmOrMention(
       failed.push(userId);
     }
   }
-  if (failed.length === 0) return;
+  if (failed.length === 0) return failed;
 
   const channel = channelId ? await sendableChannel(client, channelId) : null;
   if (!channel) {
     console.warn(`Couldn't DM ${failed.join(", ")} and had no channel to fall back to.`);
-    return;
+    return failed;
   }
   try {
     await channel.send({
@@ -102,6 +103,7 @@ export async function dmOrMention(
   } catch (err) {
     console.error("Channel fallback post failed:", err);
   }
+  return failed;
 }
 
 // Queue the 48 h and day-of reminders for a rehearsal. A reminder whose time has
@@ -316,24 +318,37 @@ export async function dropPoll(client: Client, pollId: number): Promise<boolean>
 
 // --- Reminders ------------------------------------------------------------------
 
-export async function sendReminder(client: Client, rehearsalId: number, key: Extract<CopyKey, "remindBefore" | "remindDayOf">) {
+export type ReminderKey = Extract<CopyKey, "remindBefore" | "remindDayOf">;
+
+// Returns who it went to and who couldn't be DMed, or null if the rehearsal isn't scheduled.
+export async function sendReminder(
+  client: Client,
+  rehearsalId: number,
+  key: ReminderKey,
+): Promise<{ recipients: string[]; failed: string[] } | null> {
   const [rehearsal] = await db.select().from(rehearsals).where(eq(rehearsals.id, rehearsalId));
-  if (!rehearsal || rehearsal.status !== "scheduled") return;
+  if (!rehearsal || rehearsal.status !== "scheduled") return null;
 
   const attendees = await db
     .select({ userId: rehearsalAttendees.userId })
     .from(rehearsalAttendees)
     .where(eq(rehearsalAttendees.rehearsalId, rehearsalId));
-  if (attendees.length === 0) return;
+  const recipients = attendees.map((a) => a.userId);
+  if (recipients.length === 0) return { recipients, failed: [] };
 
   const content = say(key, {
     when: formatWindow(rehearsal.startsAt, rehearsal.endsAt),
     time: formatTimes(rehearsal.startsAt, rehearsal.endsAt),
   });
-  await dmOrMention(
-    client,
-    attendees.map((a) => a.userId),
-    { content },
-    await rehearsalChannelId(rehearsal),
-  );
+  const failed = await dmOrMention(client, recipients, { content }, await rehearsalChannelId(rehearsal));
+  return { recipients, failed };
+}
+
+// Every scheduled rehearsal that hasn't started yet, soonest first.
+export async function upcomingRehearsals(): Promise<Rehearsal[]> {
+  return db
+    .select()
+    .from(rehearsals)
+    .where(and(eq(rehearsals.status, "scheduled"), gt(rehearsals.startsAt, new Date())))
+    .orderBy(asc(rehearsals.startsAt));
 }
