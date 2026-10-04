@@ -9,10 +9,10 @@ import {
 } from "discord.js";
 import { config } from "../config.js";
 import { say } from "../copy.js";
-import { isAdmin } from "../permissions.js";
+import { canDebug, isAdmin } from "../permissions.js";
 import { DROP_PREFIX, PICK_PREFIX } from "../rehearsals.js";
 import { CANCEL_MODAL_ID, handleCancel, handleCancelSubmit } from "./cancel.js";
-import { handleDebugSendReminders, REMINDER_OPTION } from "./debug.js";
+import { handleDebugClosePoll, handleDebugSendReminders, REMINDER_OPTION } from "./debug.js";
 import { handleDecisionButton } from "./decision.js";
 import { handleNext } from "./next.js";
 import {
@@ -49,14 +49,23 @@ export const naviCommand = new SlashCommandBuilder()
             { name: "Day-of reminder", value: "remindDayOf" },
           ),
       ),
+  )
+  .addSubcommand((s) =>
+    s.setName("debug-close-poll").setDescription("Close every open rehearsal poll now, as if time ran out (admin)"),
   );
 
 const adminSubcommands = new Set(["rehearsal", "cancel"]);
+const debugSubcommands = new Set(["debug-send-reminders", "debug-close-poll"]);
 
 export async function handleNaviCommand(interaction: ChatInputCommandInteraction) {
   const sub = interaction.options.getSubcommand();
 
-  if (adminSubcommands.has(sub) && !isAdmin(interaction)) {
+  const allowed = adminSubcommands.has(sub)
+    ? isAdmin(interaction)
+    : debugSubcommands.has(sub)
+      ? canDebug(interaction)
+      : true;
+  if (!allowed) {
     await interaction.reply({ content: say("notAllowed"), flags: MessageFlags.Ephemeral });
     return;
   }
@@ -72,6 +81,8 @@ export async function handleNaviCommand(interaction: ChatInputCommandInteraction
       return handleRsvp(interaction);
     case "debug-send-reminders":
       return handleDebugSendReminders(interaction);
+    case "debug-close-poll":
+      return handleDebugClosePoll(interaction);
   }
 }
 

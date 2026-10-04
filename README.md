@@ -94,6 +94,7 @@ To test locally without pinging the band, point `.env` at the test server and se
   - If nothing can be cancelled, Navi says so instead of opening the modal.
 - `/navi rsvp`: lets someone who missed the poll opt in to reminders for the upcoming rehearsal.
 - `/navi debug-send-reminders [reminder]`: Anyone with **Manage Server** or the `ADMIN_ROLE_ID` role can use it. Sends the 48-hour (default) or day-of reminder **right now** for every upcoming rehearsal, using the same function as the scheduler, then tells you privately how many people were DMed. The scheduled reminders still go out as normal.
+- `/navi debug-close-poll`: same permissions. Closes **every open poll right now** by calling `closePoll()`, the function the scheduled job runs when a poll's time is up. It ends the Discord poll early, counts the votes, then posts the result or DMs the creator about a tie or low turnout. It then tells you privately what happened to each poll. The poll's scheduled close job is marked done, so it won't run again.
 
 ### Data model (phase 1)
 
