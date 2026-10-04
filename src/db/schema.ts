@@ -10,7 +10,9 @@ import {
 
 // All timestamps are stored in UTC and displayed in config.timeZone.
 
-export const pollStatus = pgEnum("poll_status", ["open", "closed", "cancelled"]);
+// awaiting_decision: voting ended in a tie or low turnout, and Navi has DMed the poll
+// creator to pick or confirm a time.
+export const pollStatus = pgEnum("poll_status", ["open", "awaiting_decision", "closed", "cancelled"]);
 export const rehearsalStatus = pgEnum("rehearsal_status", ["scheduled", "cancelled", "done"]);
 export const attendeeSource = pgEnum("attendee_source", ["poll", "rsvp"]);
 export const jobKind = pgEnum("job_kind", ["close_poll", "remind_before", "remind_day_of"]);

@@ -1,5 +1,10 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
-import { handleModalSubmit, handleNaviCommand, registerCommands } from "./commands/index.js";
+import {
+  handleComponent,
+  handleModalSubmit,
+  handleNaviCommand,
+  registerCommands,
+} from "./commands/index.js";
 import { config } from "./config.js";
 import { pool, runMigrations } from "./db/client.js";
 import { startScheduler } from "./scheduler.js";
@@ -21,6 +26,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleNaviCommand(interaction);
     } else if (interaction.isModalSubmit()) {
       await handleModalSubmit(interaction);
+    } else if (interaction.isMessageComponent()) {
+      await handleComponent(interaction);
     }
   } catch (err) {
     console.error("Command failed:", err);

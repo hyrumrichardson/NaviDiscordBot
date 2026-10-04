@@ -1,19 +1,20 @@
 import {
   type ChatInputCommandInteraction,
-  type GuildMember,
-  type Interaction,
   MessageFlags,
+  type MessageComponentInteraction,
   type ModalSubmitInteraction,
-  PermissionFlagsBits,
   REST,
   Routes,
   SlashCommandBuilder,
 } from "discord.js";
 import { config } from "../config.js";
 import { say } from "../copy.js";
+import { isAdmin } from "../permissions.js";
+import { DROP_PREFIX, PICK_PREFIX } from "../rehearsals.js";
 import { CANCEL_MODAL_ID, handleCancel, handleCancelSubmit } from "./cancel.js";
+import { handleDecisionButton } from "./decision.js";
 import { handleNext } from "./next.js";
-import { handleRehearsal } from "./rehearsal.js";
+import { handleRehearsal, handleRehearsalComponent, REHEARSAL_PREFIX } from "./rehearsal.js";
 import { handleRsvp } from "./rsvp.js";
 
 export const naviCommand = new SlashCommandBuilder()
@@ -31,13 +32,6 @@ export const naviCommand = new SlashCommandBuilder()
   );
 
 const adminSubcommands = new Set(["rehearsal", "cancel"]);
-
-export function isAdmin(interaction: Interaction): boolean {
-  const member = interaction.member as GuildMember | null;
-  if (!member) return false;
-  if (config.adminRoleId) return member.roles.cache.has(config.adminRoleId);
-  return member.permissions.has(PermissionFlagsBits.ManageGuild);
-}
 
 export async function handleNaviCommand(interaction: ChatInputCommandInteraction) {
   const sub = interaction.options.getSubcommand();
@@ -67,6 +61,15 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
     return;
   }
   return handleCancelSubmit(interaction);
+}
+
+// Buttons and select menus. The rehearsal panel is ephemeral, so only its admin sees it.
+export async function handleComponent(interaction: MessageComponentInteraction) {
+  const id = interaction.customId;
+  if (id.startsWith(REHEARSAL_PREFIX)) return handleRehearsalComponent(interaction);
+  if (interaction.isButton() && (id.startsWith(PICK_PREFIX) || id.startsWith(DROP_PREFIX))) {
+    return handleDecisionButton(interaction);
+  }
 }
 
 // Guild commands update instantly (global commands can take up to an hour).

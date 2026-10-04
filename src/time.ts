@@ -32,6 +32,43 @@ export function zonedDate(instant: Date, timeZone = config.timeZone): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, dateStyle: "short" }).format(instant);
 }
 
+// "2026-10-10" + 3 -> "2026-10-13". Pure calendar math, no time zone involved.
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+// "2026-10-10" -> "Sat, Oct 10"
+export function dayLabel(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(Date.UTC(y, m - 1, d, 12)));
+}
+
+// "14:00" -> 840
+export function parseMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 840 -> "14:00"
+export function formatMinutes(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+// "2:00 – 5:00 PM"
+export function formatTimes(startsAt: Date, endsAt: Date, timeZone = config.timeZone): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).formatRange(startsAt, endsAt);
+}
+
 // "Sat, Oct 10, 2:00 – 5:00 PM"
 export function formatWindow(startsAt: Date, endsAt: Date, timeZone = config.timeZone): string {
   const day = new Intl.DateTimeFormat("en-US", {
@@ -40,10 +77,5 @@ export function formatWindow(startsAt: Date, endsAt: Date, timeZone = config.tim
     month: "short",
     day: "numeric",
   }).format(startsAt);
-  const hours = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "2-digit",
-  }).formatRange(startsAt, endsAt);
-  return `${day}, ${hours}`;
+  return `${day}, ${formatTimes(startsAt, endsAt, timeZone)}`;
 }

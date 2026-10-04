@@ -18,6 +18,7 @@ import {
   rehearsals,
   scheduledJobs,
 } from "../db/schema.js";
+import { rehearsalChannelId } from "../rehearsals.js";
 import { formatWindow } from "../time.js";
 
 export const CANCEL_MODAL_ID = "navi-cancel";
@@ -40,7 +41,7 @@ async function cancellableItems() {
   const openPolls = await db
     .select()
     .from(rehearsalPolls)
-    .where(eq(rehearsalPolls.status, "open"))
+    .where(inArray(rehearsalPolls.status, ["open", "awaiting_decision"]))
     .orderBy(asc(rehearsalPolls.closesAt));
 
   const options =
@@ -62,7 +63,7 @@ async function cancellableItems() {
       const dates = options.filter((o) => o.pollId === p.id).map((o) => formatWindow(o.startsAt, o.endsAt));
       return {
         value: `poll:${p.id}`,
-        label: `Poll (still voting): ${dates.length} option${dates.length === 1 ? "" : "s"}`,
+        label: `Poll (${p.status === "open" ? "still voting" : "waiting on a decision"}): ${dates.length} option${dates.length === 1 ? "" : "s"}`,
         description: dates.join(" · ") || "No options",
       };
     }),
@@ -123,7 +124,7 @@ async function cancelPoll(client: Client, pollId: number): Promise<string | null
   const [poll] = await db
     .update(rehearsalPolls)
     .set({ status: "cancelled" })
-    .where(and(eq(rehearsalPolls.id, pollId), eq(rehearsalPolls.status, "open")))
+    .where(and(eq(rehearsalPolls.id, pollId), inArray(rehearsalPolls.status, ["open", "awaiting_decision"])))
     .returning();
   if (!poll) return null;
 
@@ -172,15 +173,7 @@ async function cancelRehearsal(
     );
 
   // Post in the channel the poll ran in, or where the command was run.
-  let channelId = fallbackChannelId;
-  if (rehearsal.pollOptionId) {
-    const [row] = await db
-      .select({ channelId: rehearsalPolls.channelId })
-      .from(pollOptions)
-      .innerJoin(rehearsalPolls, eq(pollOptions.pollId, rehearsalPolls.id))
-      .where(eq(pollOptions.id, rehearsal.pollOptionId));
-    if (row) channelId = row.channelId;
-  }
+  const channelId = (await rehearsalChannelId(rehearsal)) ?? fallbackChannelId;
 
   // Mention attendees so the people expecting reminders see it.
   const attendees = await db

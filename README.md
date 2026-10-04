@@ -10,8 +10,9 @@ A Discord bot for **Final Bossa**. It schedules rehearsals and sends reminders, 
 
 The project skeleton is in place. The bot boots, runs database migrations, registers `/navi` and runs the scheduler.
 
-- **Built:** `/navi cancel`, and queueing reminders (`queueReminders` in `src/scheduler.ts`).
-- **Still stubs** (`TODO(phase 1)`): `/navi rehearsal`, `/navi next`, `/navi rsvp`, and the three scheduler jobs.
+**Phase 1 is built:** `/navi rehearsal`, `/navi next`, `/navi cancel`, `/navi rsvp`, closing the poll (including the tie and low-turnout DMs to the poll creator), and both reminder DMs. Most of the logic lives in `src/rehearsals.ts`. The rehearsal panel is in `src/commands/rehearsal.ts`.
+
+To test locally without pinging the band, point `.env` at the test server and set `POLL_DURATION_HOURS=1`, the shortest poll Discord allows.
 
 ## Repo layout
 
@@ -64,7 +65,9 @@ The project skeleton is in place. The bot boots, runs database migrations, regis
 1. **Admin runs `/navi rehearsal`.** Navi replies with a panel that only the admin can see.
    - Discord modals can only hold text inputs and select menus. There is **no calendar or date-picker component**. So the "calendar" is a multi-select listing the next 25 days (e.g. `Sat Oct 10`, `Sun Oct 11`, …). If we need more than 25 days, we can add a "next month" button.
 2. **Admin picks days.** The selected days appear as a list under the picker, each with the default time **2:00–5:00 PM**.
-3. **Admin adjusts times, one day at a time.** Each day has its own time window. The admin picks a day from a second dropdown ("Edit time for…"), then `◀ 1 hr` / `1 hr ▶` move that day's window (2–5 → 1–4 → 12–3). Another button changes its length (default 3 hrs). The other days keep their own times.
+3. **Admin adjusts times, one day at a time.** Each day has its own time window. The admin picks a day from a second dropdown ("Edit time for…"), then `◀ 1 hr` / `1 hr ▶` move that day's window (2–5 → 1–4 → 12–3). `− 30 min` / `+ 30 min` change its length (default 3 hrs, between 1 and 6 hrs). The other days keep their own times. **Use for all days** copies the current day's time to every day.
+   - The panel is held in memory for 30 minutes. If the bot restarts, run the command again.
+   - Submit refuses any day that would start before the poll closes.
 4. **Admin hits Submit.** Navi posts a **native Discord poll** in the channel:
    - Message: `@Final Bossa Member` plus a Zelda-flavoured intro (see [Voice](#voice--copy))
    - One answer per date/time, numbered in date order: 1️⃣ 2️⃣ 3️⃣ … 🔟
@@ -94,7 +97,7 @@ The project skeleton is in place. The bot boots, runs database migrations, regis
 ### Data model (phase 1)
 
 ```
-rehearsal_polls     id, guild_id, channel_id, message_id, created_by, closes_at, status (open|closed|cancelled)
+rehearsal_polls     id, guild_id, channel_id, message_id, created_by, closes_at, status (open|awaiting_decision|closed|cancelled)
 poll_options        id, poll_id, answer_id, emoji, starts_at, ends_at
 poll_votes          poll_option_id, user_id                -- snapshot taken when the poll closes
 rehearsals          id, poll_option_id, starts_at, ends_at, status (scheduled|cancelled|done)
@@ -104,7 +107,7 @@ scheduled_jobs      id, kind (close_poll|remind_before|remind_day_of), ref_id, r
 
 All times are stored in UTC and shown in the band's time zone (`TZ` in config, default `America/Chicago`).
 
-The tie and low-turnout DMs will need a new poll status (e.g. `awaiting_decision`), so a poll waiting on the creator isn't closed or picked up twice. That migration gets added along with `close_poll`.
+A poll waiting on its creator to break a tie or confirm low turnout has status `awaiting_decision`. The creator's DM has buttons. If their DMs are closed, the buttons are posted in the channel instead, and only the creator or an admin can use them.
 
 ---
 
@@ -177,7 +180,7 @@ The copy lives in one file (`src/copy.ts`) so anyone in the band can add lines.
 ## Discord setup (one time)
 
 1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot. Copy the **token** and **application ID**.
-2. Invite it with the `bot` + `applications.commands` scopes and these permissions: Send Messages, Send Polls, Mention Roles, Read Message History.
+2. Invite it with the `bot` + `applications.commands` scopes and these permissions: View Channels, Send Messages, Send Polls, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs that last one to ping the member role, unless the role itself is set to "Allow anyone to @mention this role".
 3. Create the **Final Bossa Member** role in the server and copy its ID (Developer Mode → right-click → Copy Role ID).
 
 ## Local development

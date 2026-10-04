@@ -1,0 +1,1 @@
+ALTER TYPE "public"."poll_status" ADD VALUE 'awaiting_decision' BEFORE 'closed';
