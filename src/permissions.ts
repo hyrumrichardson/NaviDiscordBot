@@ -9,6 +9,12 @@ export function isAdmin(interaction: Interaction): boolean {
   return member.permissions.has(PermissionFlagsBits.ManageGuild);
 }
 
+// Has the band member role (MEMBER_ROLE_ID, the role polls ping).
+export function isMember(interaction: Interaction): boolean {
+  const member = interaction.member as GuildMember | null;
+  return !!member && member.roles.cache.has(config.memberRoleId);
+}
+
 // Debug commands: Manage Server OR the ADMIN_ROLE_ID role.
 export function canDebug(interaction: Interaction): boolean {
   const member = interaction.member as GuildMember | null;

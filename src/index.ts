@@ -7,6 +7,7 @@ import {
 } from "./commands/index.js";
 import { config } from "./config.js";
 import { pool, runMigrations } from "./db/client.js";
+import { syncGuides } from "./guide.js";
 import { startScheduler } from "./scheduler.js";
 
 const client = new Client({
@@ -18,6 +19,8 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`Hey! Listen! Logged in as ${c.user.tag}`);
   await registerCommands();
   startScheduler(c);
+  // Re-sync the posted command guide with docs/member-help.txt (edits only if it changed).
+  await syncGuides(c).catch((err) => console.error("[guide] Sync failed:", err));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

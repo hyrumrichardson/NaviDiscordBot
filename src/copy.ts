@@ -90,6 +90,9 @@ export const copy = {
   notBuiltYet: [
     "**Hey!** This part of the forest isn't finished yet. Come back later!",
   ],
+  notMember: [
+    "**Watch out!** Only Final Bossa members can start a rehearsal poll.",
+  ],
   notAllowed: [
     "**Watch out!** Only band admins can do that.",
   ],

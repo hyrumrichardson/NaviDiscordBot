@@ -13,5 +13,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY drizzle ./drizzle
+# The command guide is posted into Discord and re-synced on startup (src/guide.ts).
+COPY docs ./docs
 USER node
 CMD ["node", "dist/index.js"]

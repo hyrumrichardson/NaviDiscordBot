@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   integer,
   pgEnum,
@@ -83,4 +84,13 @@ export const scheduledJobs = pgTable("scheduled_jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   attempts: integer("attempts").notNull().default(0),
   lastError: text("last_error"),
+});
+
+// One row per server. The command guide (docs/member-help.txt) is posted to guide_channel_id
+// by /navi guide-channel and re-synced on every startup (see src/guide.ts).
+export const guildSettings = pgTable("guild_settings", {
+  guildId: text("guild_id").primaryKey(),
+  guideChannelId: text("guide_channel_id"),
+  // The guide's messages in order (long guides are split to fit Discord's 2000-char limit).
+  guideMessageIds: text("guide_message_ids").array().notNull().default(sql`'{}'::text[]`),
 });

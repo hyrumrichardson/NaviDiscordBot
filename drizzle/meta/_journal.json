@@ -15,6 +15,13 @@
       "when": 1791086894206,
       "tag": "0001_poll_awaiting_decision",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791162243990,
+      "tag": "0002_guild_settings",
+      "breakpoints": true
     }
   ]
 }

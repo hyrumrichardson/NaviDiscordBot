@@ -57,12 +57,13 @@ To test locally without pinging the band, point `.env` at the test server and us
 
 ### Roles
 
-- **Admin**: anyone with `Manage Server`, or a dedicated `Navi Admin` role. Only admins can run `/navi rehearsal`.
+- **Admin**: anyone with `Manage Server`, or a dedicated `Navi Admin` role. Only admins can run `/navi cancel` and `/navi guide-channel`.
+- **Members**: anyone with the Final Bossa Member role (`MEMBER_ROLE_ID`) can run `/navi rehearsal`. Everyone else gets "Only Final Bossa members can start a rehearsal poll."
 - **Final Bossa Member**: a new role. Polls ping this role instead of `@everyone`, so the rest of the server isn't bothered. The role to ping can be changed in config.
 
 ### `/navi rehearsal` flow
 
-1. **Admin runs `/navi rehearsal`.** Navi replies with a panel that only the admin can see.
+1. **A member runs `/navi rehearsal`.** Navi replies with a panel that only they can see. Below, "admin" means whoever ran the command. They become the poll's creator, who gets the tie and low-turnout DMs.
    - Discord modals can only hold text inputs and select menus. There is **no calendar or date-picker component**. So the "calendar" is a multi-select listing the next 25 days (e.g. `Sat Oct 10`, `Sun Oct 11`, …). If we need more than 25 days, we can add a "next month" button.
 2. **Admin picks days.** The selected days appear as a list under the picker, each with the default time **2:00–5:00 PM**.
 3. **Admin adjusts times, one day at a time.** Each day has its own time window. The admin picks a day from a second dropdown ("Edit time for…"), then picks a time from the **Time** dropdown. It lists 3-hour windows from 10 AM–1 PM through 6–9 PM. **Custom…** opens a pop-up where they can type any time between 1 and 8 hours long, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime: `6-9` means evening and `10-1` means late morning. The other days keep their own times. **Use this time for all days** copies the current day's time to every day.
@@ -101,6 +102,15 @@ To test locally without pinging the band, point `.env` at the test server and us
 - `/navi rsvp`: lets someone who missed the poll opt in to reminders for the upcoming rehearsal.
 - `/navi debug-send-reminders [reminder]`: Anyone with **Manage Server** or the `ADMIN_ROLE_ID` role can use it. Sends the 48-hour (default) or day-of reminder **right now** for every upcoming rehearsal, using the same function as the scheduler, then tells you privately how many people were DMed. The scheduled reminders still go out as normal.
 - `/navi debug-close-poll`: same permissions. Closes **every open poll right now** by calling `closePoll()`, the function the scheduled job runs when a poll's time is up. It counts the reactions, marks the poll message closed, then posts the result or DMs the creator about a tie or low turnout. It then tells you privately what happened to each poll. The poll's scheduled close job is marked done, so it won't run again.
+- `/navi guide-channel channel:#channel`: admin only. Posts the command guide (`docs/member-help.txt`) to that channel. See [Command guide](#command-guide).
+
+### Command guide
+`docs/member-help.txt` is **live content**: it's published into Discord rather than copy-pasted. This works the same way as podium's command guides.
+- `/navi guide-channel` posts it and stores the message IDs in `guild_settings`. Running it again with the same channel **edits the messages in place**. Picking a different channel moves the guide and deletes the old copy.
+- **On every startup**, Navi compares the file with the live messages and edits only what changed. So to update the guide in Discord, edit the `.txt`, then commit and push. Auto-update restarts the bot and the guide updates itself. Changes are logged as `[guide] Updated the command guide…`.
+- The guide is split to stay under Discord's 2000-character limit. It splits first at a `━━━━━━━━━━━━━━━━━━━━━━━━` line, if you add one between sections, and otherwise at line breaks.
+- If someone deletes one of the guide messages by hand, Navi reposts the whole guide so it stays in order.
+- Unlike podium, there's no dev channel, so Navi doesn't post a diff of what changed.
 
 ### Data model (phase 1)
 
@@ -190,6 +200,7 @@ The copy lives in one file (`src/copy.ts`) so anyone in the band can add lines.
 1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot. Copy the **token** and **application ID**.
 2. Invite it with the `bot` + `applications.commands` scopes and these permissions: View Channels, Send Messages, **Add Reactions**, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs that last one to ping the member role, unless the role itself is set to "Allow anyone to @mention this role".
 3. Create the **Final Bossa Member** role in the server and copy its ID (Developer Mode → right-click → Copy Role ID).
+4. Once the bot is running, run `/navi guide-channel` and pick the channel where the command guide should live.
 
 ## Local development
 
