@@ -2,74 +2,42 @@
 
 > *Hey! Listen!*
 
-A Discord bot for **Final Bossa**. It schedules rehearsals and sends reminders, and later it will manage set lists and sheet music. It's named after the fairy from *The Legend of Zelda*, and it talks like her.
+A Discord bot for **Final Bossa**. It runs rehearsal scheduling: a member posts a poll of possible days and times, the band votes with emoji reactions, Navi picks the winner and DMs everyone a reminder before rehearsal. It's named after the fairy from *The Legend of Zelda*, and it talks like her.
+
+Set lists and sheet music are planned for later ([Future phases](#future-phases-notes-only-nothing-built)).
 
 ---
 
-## Status
+## Commands
 
-The project skeleton is in place. The bot boots, runs database migrations, registers `/navi` and runs the scheduler.
+| Command | Who can use it | What it does |
+|---|---|---|
+| `/navi rehearsal` | Members | Opens a private panel to pick days and times, then posts a rehearsal poll. |
+| `/navi next` | Everyone | Shows the next rehearsal, whether you're on its reminder list, and any open polls. |
+| `/navi rsvp` | Everyone | Adds you to the reminder list for the next rehearsal (for anyone who missed the poll). |
+| `/navi cancel` | Admins | Cancels an upcoming rehearsal or an open poll, picked from a dropdown. |
+| `/navi guide-channel channel:#ch` | Admins | Posts the command guide to a channel and keeps it up to date. |
+| `/navi debug-close-poll` | Admins | Closes every open poll right now, as if its time had run out. |
+| `/navi debug-send-reminders [reminder]` | Admins | Sends the 48-hour (default) or day-of reminder right now for every upcoming rehearsal. |
 
-**Phase 1 is built:** `/navi rehearsal`, `/navi next`, `/navi cancel`, `/navi rsvp`, closing the poll (including the tie and low-turnout DMs to the poll creator), and both reminder DMs. Most of the logic lives in `src/rehearsals.ts`. The rehearsal panel is in `src/commands/rehearsal.ts`.
+Navi's replies to commands are private (only you see them). The poll, its result and cancellation notices are posted publicly in the channel.
 
-To test locally without pinging the band, point `.env` at the test server and use `/navi debug-close-poll` and `/navi debug-send-reminders` instead of waiting for the timers.
-
-## Repo layout
-
-```
-.
-├── src/
-│   ├── index.ts            # Entry point: migrate DB → log in → register commands → start scheduler
-│   ├── config.ts           # Reads env vars (see .env.example)
-│   ├── copy.ts             # Everything Navi says (Zelda lines live here)
-│   ├── scheduler.ts        # Checks scheduled_jobs every minute (poll close + reminders)
-│   ├── commands/
-│   │   ├── index.ts        # /navi definition, admin check, subcommand router
-│   │   ├── rehearsal.ts    # /navi rehearsal
-│   │   ├── next.ts         # /navi next
-│   │   ├── cancel.ts       # /navi cancel
-│   │   └── rsvp.ts         # /navi rsvp
-│   └── db/
-│       ├── schema.ts       # Drizzle table definitions
-│       └── client.ts       # Postgres pool + migration runner
-├── drizzle/                # Generated SQL migrations (committed; applied on startup)
-├── scripts/update.sh       # Unraid: git pull + rebuild + restart
-├── Dockerfile
-├── docker-compose.yml      # navi + postgres
-├── drizzle.config.ts
-└── .env.example
-```
-
-## Stack
-
-| Piece        | Choice                                    | Why |
-|--------------|-------------------------------------------|-----|
-| Language     | TypeScript (Node 22)                      | Best-supported Discord library |
-| Discord lib  | [discord.js](https://discord.js.org) v14  | Supports modals, select menus, buttons and reactions |
-| Database     | PostgreSQL 16                             | Stores rehearsals, votes and reminders, and later songs and set lists |
-| DB access    | Drizzle ORM + migrations                  | Lightweight and typed |
-| Scheduling   | Jobs stored in a Postgres table, checked every minute | Reminders still go out after a restart |
-| Run locally  | `docker compose` (bot + postgres)         | One command to start testing |
+**Who counts as what**
+- **Members**: people with the Final Bossa Member role (`MEMBER_ROLE_ID`). It's also the role polls ping, so the rest of the server isn't bothered.
+- **Admins**: people with the `ADMIN_ROLE_ID` role, or with **Manage Server** if no admin role is set. The two debug commands accept either one.
 
 ---
 
-## Phase 1: Rehearsal scheduling
+## How a rehearsal poll works
 
-### Roles
-
-- **Admin**: anyone with `Manage Server`, or a dedicated `Navi Admin` role. Only admins can run `/navi cancel` and `/navi guide-channel`.
-- **Members**: anyone with the Final Bossa Member role (`MEMBER_ROLE_ID`) can run `/navi rehearsal`. Everyone else gets "Only Final Bossa members can start a rehearsal poll."
-- **Final Bossa Member**: a new role. Polls ping this role instead of `@everyone`, so the rest of the server isn't bothered. The role to ping can be changed in config.
-
-### `/navi rehearsal` flow
-
-1. **A member runs `/navi rehearsal`.** Navi replies with a panel that only they can see. Below, "admin" means whoever ran the command. They become the poll's creator, who gets the tie and low-turnout DMs.
-   - Discord modals can only hold text inputs and select menus. There is **no calendar or date-picker component**. So the "calendar" is a multi-select listing the next 25 days (e.g. `Sat Oct 10`, `Sun Oct 11`, …). If we need more than 25 days, we can add a "next month" button.
-2. **Admin picks days.** The selected days appear as a list under the picker, each with the default time **2:00–5:00 PM**.
-3. **Admin adjusts times, one day at a time.** Each day has its own time window. The admin picks a day from a second dropdown ("Edit time for…"), then picks a time from the **Time** dropdown. It lists 3-hour windows from 10 AM–1 PM through 6–9 PM. **Custom…** opens a pop-up where they can type any time between 1 and 8 hours long, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime: `6-9` means evening and `10-1` means late morning. The other days keep their own times. **Use this time for all days** copies the current day's time to every day.
-   - The panel is held in memory for 30 minutes. If the bot restarts, run the command again.
-   - Submit refuses any day that would start before the poll closes.
-4. **Admin hits Submit.** Navi posts an **emoji poll** in the channel. It's a normal message, not a Discord poll:
+1. **A member runs `/navi rehearsal`** and gets a panel only they can see. They become the poll's **creator**.
+2. **They pick up to 10 days** from a dropdown of the next 25 days. Discord has no date-picker component, so the dropdown stands in for a calendar.
+3. **They set a time for each day.** Each day starts at **2:00–5:00 PM**. To change a day, pick it under **Edit time for…**, then choose from the **Time** dropdown:
+   - Presets: 3-hour windows from 10 AM–1 PM through 6–9 PM.
+   - **Custom…** opens a pop-up to type any 1–8 hour window, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime, so `6-9` means evening and `10-1` means late morning.
+   - **Use this time for all days** copies the current day's time to every day.
+   - Navi won't send a poll with a day that starts before voting ends. The panel lasts 30 minutes, or until the bot restarts.
+4. **They hit Send poll.** Navi posts a normal message that pings the member role and adds the reactions itself, so voting is one tap:
    ```
    Hey @Final Bossa Member! When can you make rehearsal? Vote for every time that works. Poll closes in 24 hours.
 
@@ -78,80 +46,243 @@ To test locally without pinging the band, point `.env` at the test server and us
 
    React with the number of every time that works for you.
    ```
-   - Navi adds the reactions itself (1️⃣ 2️⃣ … 🔟), so voting is one tap. People can react to as many times as work for them.
-   - **One day only:** the option is 👍 instead of 1️⃣, and the message asks *"Can you make it to rehearsal at this time?"* (`pollPostedSingle` in `copy.ts`).
-   - Up to **10 days** per poll.
-5. **Poll closes after 24 hours.** Navi counts the reactions (ignoring its own) and adds *"🔒 Voting is closed."* to the poll message. Reactions can't be locked, so anything added after that is ignored. Navi then posts the result in **the same channel**:
-   *"Rehearsal will be **Sat Oct 10, 2–5 PM**."*
-   - The winner is the answer with the most votes.
-   - **Tie:** Navi sends the person who set up the poll a DM with one button per tied time, and waits for them to pick one.
-   - **Low turnout:** if the winning time has fewer than **4** votes (`MIN_TURNOUT`), Navi DMs the poll creator to **confirm** the time or **drop** it.
-   - Navi only posts the result and queues reminders once the creator has answered either DM.
-6. **48 hours before rehearsal**, Navi sends a DM to everyone who voted for the winning time.
-7. **9:00 AM on rehearsal day**, Navi sends a second DM to the same people.
-   - Any reminder whose time has **already passed** when the rehearsal is set is skipped, not sent late. For example, if the poll closes 30 hours before rehearsal, only the 9 AM reminder goes out. A 9 AM reminder for a rehearsal that starts before 9 AM is skipped too.
-   - If someone has DMs turned off, Navi falls back to a single channel post that mentions them.
+   With only one day, the option is 👍 and the message asks *"Can you make it to rehearsal at this time?"*
+5. **After 24 hours, Navi counts the reactions** (ignoring its own) and adds *🔒 Voting is closed.* to the poll. Discord can't lock reactions, so later ones are ignored. Then:
+   - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll.
+   - **A tie**: Navi DMs the creator one button per tied time.
+   - **Fewer than 4 votes** (`MIN_TURNOUT`): Navi DMs the creator to **keep** the time or choose **No rehearsal**.
+   - **No votes**: Navi says so in the channel.
+6. **Reminders** go to everyone who voted for the winning time, plus anyone who used `/navi rsvp`:
+   - **48 hours before** rehearsal.
+   - **9:00 AM on rehearsal day.**
+   - A reminder whose time has already passed when the rehearsal is set is skipped, not sent late. For example, if the poll closes 30 hours before rehearsal, only the 9 AM one goes out.
+   - If someone's DMs are closed, Navi mentions them in the poll's channel instead.
 
-### Other commands (small, but useful)
+If the creator's DMs are closed, the tie or turnout buttons are posted in the channel instead. Only the creator or an admin can use them.
 
-- `/navi next`: shows the next scheduled rehearsal.
-- `/navi cancel` *(built)*: admin only. Opens a modal with a dropdown of everything that can be cancelled: every upcoming scheduled rehearsal **and** every poll still taking votes (up to 25).
-  - **Rehearsal:** marks it cancelled, deletes its pending reminders, and posts in the poll's channel, mentioning everyone who was expecting reminders.
-  - **Open poll:** marks it cancelled, deletes its `close_poll` job, adds *"🚫 This poll was cancelled."* to the poll message, and posts a notice in the channel.
-  - If nothing can be cancelled, Navi says so instead of opening the modal.
-- `/navi rsvp`: lets someone who missed the poll opt in to reminders for the upcoming rehearsal.
-- `/navi debug-send-reminders [reminder]`: Anyone with **Manage Server** or the `ADMIN_ROLE_ID` role can use it. Sends the 48-hour (default) or day-of reminder **right now** for every upcoming rehearsal, using the same function as the scheduler, then tells you privately how many people were DMed. The scheduled reminders still go out as normal.
-- `/navi debug-close-poll`: same permissions. Closes **every open poll right now** by calling `closePoll()`, the function the scheduled job runs when a poll's time is up. It counts the reactions, marks the poll message closed, then posts the result or DMs the creator about a tie or low turnout. It then tells you privately what happened to each poll. The poll's scheduled close job is marked done, so it won't run again.
-- `/navi guide-channel channel:#channel`: admin only. Posts the command guide (`docs/member-help.txt`) to that channel. See [Command guide](#command-guide).
+`/navi cancel` covers both scheduled rehearsals and polls that are still open or waiting on a decision. Cancelling deletes pending reminders, marks the poll *🚫 This poll was cancelled.* and tells the channel. Cancelling a rehearsal also mentions everyone who was expecting reminders.
 
-### Command guide
-`docs/member-help.txt` is **live content**: it's published into Discord rather than copy-pasted. This works the same way as podium's command guides.
-- `/navi guide-channel` posts it and stores the message IDs in `guild_settings`. Running it again with the same channel **edits the messages in place**. Picking a different channel moves the guide and deletes the old copy.
-- **On every startup**, Navi compares the file with the live messages and edits only what changed. So to update the guide in Discord, edit the `.txt`, then commit and push. Auto-update restarts the bot and the guide updates itself. Changes are logged as `[guide] Updated the command guide…`.
-- The guide is split to stay under Discord's 2000-character limit. It splits first at a `━━━━━━━━━━━━━━━━━━━━━━━━` line, if you add one between sections, and otherwise at line breaks.
-- If someone deletes one of the guide messages by hand, Navi reposts the whole guide so it stays in order.
-- Unlike podium, there's no dev channel, so Navi doesn't post a diff of what changed.
+---
 
-### Data model (phase 1)
+## Command guide in Discord
 
-```
-rehearsal_polls     id, guild_id, channel_id, message_id, created_by, closes_at, status (open|awaiting_decision|closed|cancelled)
-poll_options        id, poll_id, answer_id, emoji, starts_at, ends_at
-poll_votes          poll_option_id, user_id                -- snapshot taken when the poll closes
-rehearsals          id, poll_option_id, starts_at, ends_at, status (scheduled|cancelled|done)
-rehearsal_attendees rehearsal_id, user_id, source (poll|rsvp)
-scheduled_jobs      id, kind (close_poll|remind_before|remind_day_of), ref_id, run_at, completed_at, attempts, last_error
-```
+[`docs/member-help.txt`](docs/member-help.txt) is **live content**: it's published into Discord rather than copy-pasted.
+- `/navi guide-channel` posts it and stores the message IDs. Running it again with the same channel edits the messages in place. Picking a different channel moves the guide and deletes the old copy.
+- **On every startup**, Navi compares the file with the live messages and edits only what changed. So to update the guide, edit the `.txt` and push. Auto-update restarts the bot, and the guide updates itself.
+- Long guides are split to stay under Discord's 2000-character limit. Navi splits first at a `━━━━━━━━━━━━━━━━━━━━━━━━` line if there is one, otherwise at line breaks. If someone deletes a guide message by hand, Navi reposts the whole guide so it stays in order.
 
-All times are stored in UTC and shown in the band's time zone (`TZ` in config, default `America/Chicago`).
+---
 
-A poll waiting on its creator to break a tie or confirm low turnout has status `awaiting_decision`. The creator's DM has buttons. If their DMs are closed, the buttons are posted in the channel instead, and only the creator or an admin can use them.
+## Configuration
+
+Everything is set in `.env` (copy [`.env.example`](.env.example)). `.env` is never committed.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DISCORD_TOKEN` | | Bot token from the Developer Portal. |
+| `DISCORD_CLIENT_ID` | | The application's ID. |
+| `GUILD_ID` | | The server Navi runs in. Navi serves one server at a time. |
+| `MEMBER_ROLE_ID` | | The member role: can start polls, and gets pinged by them. |
+| `ADMIN_ROLE_ID` | blank | The admin role. If blank, admins are people with Manage Server. |
+| `TZ` | `America/Chicago` | The band's time zone. All times are shown in it. |
+| `REHEARSAL_DEFAULT_START` | `14:00` | The time each day starts at in the panel. |
+| `REHEARSAL_DEFAULT_HOURS` | `3` | Rehearsal length, used for the default and the presets. |
+| `POLL_DURATION_HOURS` | `24` | How long a poll stays open. |
+| `REMINDER_HOURS_BEFORE` | `48` | When the first reminder goes out. |
+| `DAY_OF_REMINDER_TIME` | `09:00` | When the day-of reminder goes out. |
+| `MIN_TURNOUT` | `4` | Below this many votes for the winning time, Navi asks the creator to confirm. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `navi` / — / `navi` | Database login. Set a real password before the first start. |
+| `POSTGRES_PORT` | `5433` | Port the database is exposed on, for pgAdmin, DBeaver or `npm run dev`. |
+| `DATABASE_URL` | | Used by `npm run dev` on your PC. Docker Compose sets its own. |
+| `DATA_DIR` | `./data/postgres` | Where Postgres keeps its data on the host. |
+
+If you change the poll or reminder timings, also update the matching wording in `src/copy.ts` and `docs/member-help.txt` ("24 hours", "two days", "9 AM").
 
 ---
 
 ## Voice & copy
 
-Every message Navi sends should sound like a Zelda character. Navi's own lines (*"Hey!"*, *"Listen!"*, *"Look!"*, *"Watch out!"*, *"Hello!"*) come first, then lines from the rest of the series. Navi picks at random from a small pool for each message type so reminders don't get stale.
+Everything Navi says lives in [`src/copy.ts`](src/copy.ts), so anyone in the band can edit it. Each message type is a list of lines, and Navi picks one at random. Add more lines to a type to vary it. Placeholders like `{when}`, `{time}`, `{role}`, `{hours}`, `{channel}` and `{count}` are filled in automatically. The comment at the top of the file explains each one.
 
-| Moment | Example copy |
-|---|---|
-| Poll posted | **Hey! Listen!** 🧚 @Final Bossa Member, when can you make rehearsal? *It's dangerous to go alone!* Vote below. Poll closes in 24 hours. |
-| Poll posted (alt) | **Dawn of the First Day.** ⏳ *-24 Hours Remain-*. Vote for every time that works for you! |
-| Poll closed | **Look!** 👀 The Great Deku Tree has spoken. Rehearsal will be **Sat Oct 10, 2–5 PM**. |
-| No votes | *You've met with a terrible fate, haven't you?* Nobody voted. Try another set of dates? |
-| 48 h DM | **Hey! Listen!** Rehearsal is in two days: **Sat Oct 10, 2–5 PM**. *Dawn of the Second-to-Last Day, 48 Hours Remain.* Dust off your ocarina. 🎵 |
-| Day-of DM (9 AM) | **Watch out!** ⚔️ *Dawn of the Final Day.* Rehearsal is **today, 2–5 PM**. *It's dangerous to go alone, take this:* 🎼 |
-| Day-of DM (alt) | **Hello!** Kaepora Gaebora here. Hoo hoo! Rehearsal is today at 2 PM. *Did you get all that? Do you want to hear what I said again?* `[Yes] [No]` |
-| Cancelled | *Well, excuse me, Princess!* Rehearsal on Sat Oct 10 is **cancelled**. |
-| RSVP confirmed | *You got the Rehearsal Reminder!* 🎶 *(da-na-na-naaa)* |
+Navi's lines lean on Zelda: *"Hey! Listen!"*, *"Watch out!"*, *"Well, excuse me, Princess!"*, *"You've met with a terrible fate, haven't you?"*
 
-The copy lives in one file (`src/copy.ts`) so anyone in the band can add lines.
+---
+
+## Repo layout
+
+```
+.
+├── src/
+│   ├── index.ts            # Entry point: migrate DB → log in → register commands → scheduler → guide sync
+│   ├── config.ts           # Reads env vars (see .env.example)
+│   ├── copy.ts             # Everything Navi says
+│   ├── rehearsals.ts       # Closing polls, ties/turnout decisions, reminders, DM fallback
+│   ├── scheduler.ts        # Runs due jobs from scheduled_jobs every minute
+│   ├── guide.ts            # Posts and re-syncs the command guide
+│   ├── permissions.ts      # Member / admin checks
+│   ├── time.ts             # Time zone math and parsing typed times
+│   ├── commands/
+│   │   ├── index.ts        # /navi definition, permissions, routing
+│   │   ├── rehearsal.ts    # /navi rehearsal panel and posting the poll
+│   │   ├── decision.ts     # Tie / low-turnout buttons
+│   │   ├── next.ts         # /navi next
+│   │   ├── rsvp.ts         # /navi rsvp
+│   │   ├── cancel.ts       # /navi cancel
+│   │   ├── guide.ts        # /navi guide-channel
+│   │   └── debug.ts        # /navi debug-close-poll, debug-send-reminders
+│   └── db/
+│       ├── schema.ts       # Drizzle table definitions
+│       └── client.ts       # Postgres pool + migration runner
+├── docs/member-help.txt    # The command guide posted in Discord (live content)
+├── drizzle/                # Generated SQL migrations (committed; applied on startup)
+├── scripts/
+│   ├── update.sh           # Unraid: git pull + rebuild + restart
+│   └── auto-update.sh      # Unraid: runs update.sh only when GitHub has new commits
+├── Dockerfile
+├── docker-compose.yml      # navi + postgres
+└── .env.example
+```
+
+## Stack
+
+| Piece | Choice | Why |
+|---|---|---|
+| Language | TypeScript (Node 22) | Best-supported Discord library |
+| Discord lib | [discord.js](https://discord.js.org) v14 | Modals, select menus, buttons and reactions |
+| Database | PostgreSQL 16 | Polls, votes, rehearsals, reminders and settings |
+| DB access | Drizzle ORM + migrations | Lightweight and typed |
+| Scheduling | Jobs stored in a Postgres table, checked every minute | Reminders still go out after a restart |
+| Hosting | Docker Compose on Unraid | Bot + database in two containers |
+
+## Data model
+
+```
+rehearsal_polls     id, guild_id, channel_id, message_id, created_by, closes_at, status (open|awaiting_decision|closed|cancelled)
+poll_options        id, poll_id, answer_id, emoji, starts_at, ends_at
+poll_votes          poll_option_id, user_id                -- snapshot of reactions taken when the poll closes
+rehearsals          id, poll_option_id, starts_at, ends_at, status (scheduled|cancelled|done)
+rehearsal_attendees rehearsal_id, user_id, source (poll|rsvp)
+scheduled_jobs      id, kind (close_poll|remind_before|remind_day_of), ref_id, run_at, completed_at, attempts, last_error
+guild_settings      guild_id, guide_channel_id, guide_message_ids
+```
+
+All times are stored in UTC. `awaiting_decision` is a poll waiting on its creator to break a tie or confirm low turnout. A failing job is retried every minute, up to 5 times.
+
+---
+
+## Discord setup (one time)
+
+1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications). Copy the **Application ID**. On the **Bot** page, copy the **token** and set the bot's **Username**. That's the name the server sees; the application name isn't shown there.
+2. Invite it from **OAuth2 → URL Generator** with the `bot` and `applications.commands` scopes and these permissions: View Channels, Send Messages, **Add Reactions**, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs the last one to ping the member role, unless the role is set to "Allow anyone to @mention this role".
+3. Turn on Developer Mode (User Settings → Advanced). Copy the **server ID**, create the **Final Bossa Member** role, give it to the band and copy its **role ID**. Optionally create an admin role and copy its ID too.
+4. Once the bot is running, run `/navi guide-channel` to post the command guide.
+
+## Local development
+
+Postgres runs in Docker and the bot runs on your PC with hot reload. Point your local `.env` at a **test server** so polls and DMs don't reach the band.
+
+```bash
+cp .env.example .env            # fill in the test server's values
+npm install
+docker compose up -d postgres   # Postgres on localhost:5433
+npm run dev                     # migrates the DB, starts the bot, and reloads on save
+```
+
+Use `/navi debug-close-poll` and `/navi debug-send-reminders` instead of waiting for the timers.
+
+When you change `src/db/schema.ts`:
+
+```bash
+npm run db:generate -- --name describe_change   # writes a new SQL file to drizzle/. Commit it.
+```
+
+Migrations are applied automatically when the bot starts. `npm run db:studio` opens a browser view of the database. `npm run typecheck` checks the code without building it.
+
+> If `npm run dev` fails because npm blocked esbuild's install script, run `npm approve-scripts esbuild` and then `npm rebuild esbuild`.
+
+## Deploying on Unraid
+
+The bot and Postgres run as two containers from `docker-compose.yml`. They're managed by the **Compose Manager** plugin, or by plain `docker compose` over SSH. You'll need `git` on the server (check with `git --version`) and `docker compose` (installed by Compose Manager).
+
+### First install
+
+The repo is private, so the server reads it with a **deploy key**: an SSH key with read-only access to this one repo. It's kept in appdata rather than `/root`, because Unraid wipes `/root` on every reboot.
+
+```bash
+mkdir -p /mnt/user/appdata/navi/.ssh && chmod 700 /mnt/user/appdata/navi/.ssh
+ssh-keygen -t ed25519 -N "" -C "unraid-navi" -f /mnt/user/appdata/navi/.ssh/deploy_key
+cat /mnt/user/appdata/navi/.ssh/deploy_key.pub
+```
+
+Add that public key on GitHub under **Settings → Deploy keys**, with write access off. Then clone, configure and start:
+
+```bash
+cd /mnt/user/appdata/navi
+SSH_CMD="ssh -i /mnt/user/appdata/navi/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/mnt/user/appdata/navi/.ssh/known_hosts"
+GIT_SSH_COMMAND="$SSH_CMD" git clone git@github.com:hyrumrichardson/NaviDiscordBot.git repo
+git -C repo config core.sshCommand "$SSH_CMD"     # later pulls use the key automatically
+
+cd repo
+cp .env.example .env
+nano .env
+#   Discord values, a real POSTGRES_PASSWORD, and DATA_DIR=/mnt/user/appdata/navi/postgres
+docker compose up -d --build
+docker compose logs -f navi     # look for "Hey! Listen! Logged in as …"
+```
+
+**Compose Manager:** to see the stack in the Docker tab, add a stack named `navi`. Set **Compose Source** to **External folder** → `/mnt/user/appdata/navi/repo`, and **External ENV File Path** to `/mnt/user/appdata/navi/repo/.env`. The compose file sets `name: navi`, so the command line and Compose Manager manage the same stack.
+
+### Updating
+
+Run this after pushing changes:
+
+```bash
+bash /mnt/user/appdata/navi/repo/scripts/update.sh
+```
+
+It pulls, rebuilds, restarts, and applies any new migrations on startup.
+
+**Auto-update on push.** `scripts/auto-update.sh` checks GitHub and runs `update.sh` only when `main` has new commits. To schedule it, go to **Settings → User Scripts → Add New Script** (the User Scripts plugin is in Apps). Name it `navi-auto-update` and give it this script:
+
+```bash
+#!/bin/bash
+bash /mnt/user/appdata/navi/repo/scripts/auto-update.sh
+```
+
+Set its schedule to **Custom** with `*/5 * * * *`. Each push then goes live within about 5 minutes. When nothing has changed, the script does nothing. If a build fails, the old container keeps running.
+
+**Changing `.env`** needs a recreate, because a plain restart doesn't reload it: `docker compose up -d --force-recreate navi`.
+
+### Moving Navi to a different server
+
+1. Cancel any open polls in the old server.
+2. Invite the bot to the new server (same token, see [Discord setup](#discord-setup-one-time)).
+3. Update `GUILD_ID`, `MEMBER_ROLE_ID` and `ADMIN_ROLE_ID` in `.env`, then recreate the container.
+4. Run `/navi guide-channel` in the new server, and kick Navi from the old one.
+
+### Notes
+- Postgres data lives in `DATA_DIR` under appdata, so Unraid's appdata backups include it, along with `.env` and the deploy key.
+- `POSTGRES_PORT` exposes the database on your LAN. Remove the `ports:` block in `docker-compose.yml` if you don't want that.
+- Both containers use `restart: unless-stopped`, so they come back after a reboot.
+- **Later option:** build the image with GitHub Actions and publish it to GitHub Container Registry. Unraid would then just pull it, with no git or build step on the server. This isn't set up.
+
+---
+
+## Decisions
+
+1. **Ties:** Navi DMs the poll's creator to pick one of the tied times.
+2. **Minimum turnout:** if the winning time has fewer than 4 votes, Navi DMs the creator to confirm it.
+3. **Time windows:** each day in a poll has its own time.
+4. **Who gets DMs:** the creator gets the tie and turnout DMs. Reminders go to the people who voted for the winning time, plus anyone who used `/navi rsvp`.
+5. **Polls:** emoji reactions on a normal message instead of Discord's built-in polls, with 👍 for single-day polls.
+6. **Who can start polls:** members only (`MEMBER_ROLE_ID`).
+7. **Time zone:** `America/Chicago`.
 
 ---
 
 ## Future phases (notes only, nothing built)
 
-> **Not started.** These are notes so the ideas aren't lost. No code, tables or commands exist for them yet. Phase 1 ships first, and each later phase gets designed properly before any of it is written.
+> **Not started.** These are notes so the ideas aren't lost. No code, tables or commands exist for them yet. Each phase gets designed properly before any of it is written.
 
 ### Phase 2: Song library
 **Goal:** one place that knows every song we play and every arrangement (chart) for each part.
@@ -182,89 +313,3 @@ The copy lives in one file (`src/copy.ts`) so anyone in the band can add lines.
   - What happens when a song on the set list has no chart for your part?
   - Does Navi send the packet automatically when a sub signs up?
   - Should gigs get the same reminder DMs as rehearsals?
-
----
-
-## Decisions (resolved questions)
-
-1. **Ties:** Navi DMs the person who set up the poll and asks them to pick one of the tied times.
-2. **Minimum turnout:** if the winning time has fewer than 4 votes, Navi DMs the poll creator to confirm it. The threshold is `MIN_TURNOUT`.
-3. **Time windows:** each day in a poll gets its own time window.
-4. **Who gets DMs:** the poll creator gets the tie and turnout DMs. Reminder DMs go to the people who voted for the winning time, plus anyone who used `/navi rsvp`.
-5. **Time zone:** `America/Chicago` by default (`TZ`).
-
----
-
-## Discord setup (one time)
-
-1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot. Copy the **token** and **application ID**.
-2. Invite it with the `bot` + `applications.commands` scopes and these permissions: View Channels, Send Messages, **Add Reactions**, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs that last one to ping the member role, unless the role itself is set to "Allow anyone to @mention this role".
-3. Create the **Final Bossa Member** role in the server and copy its ID (Developer Mode → right-click → Copy Role ID).
-4. Once the bot is running, run `/navi guide-channel` and pick the channel where the command guide should live.
-
-## Local development
-
-Postgres runs in Docker and the bot runs on your PC with hot reload.
-
-```bash
-cp .env.example .env            # fill in the Discord values
-npm install
-docker compose up -d postgres   # Postgres on localhost:5433
-npm run dev                     # migrates the DB, starts the bot, and reloads on save
-```
-
-When you change `src/db/schema.ts`:
-
-```bash
-npm run db:generate -- --name describe_change   # writes a new SQL file to drizzle/. Commit it.
-```
-
-Migrations are applied automatically when the bot starts. `npm run db:studio` opens a browser view of the database.
-
-> On this PC, npm blocked esbuild's install script (needed by `tsx` for `npm run dev`). If `npm run dev` errors, run `npm approve-scripts esbuild` and then `npm rebuild esbuild`.
-
-## Deploying on Unraid
-
-The bot and Postgres run as two containers from `docker-compose.yml`, managed by the **Compose Manager** plugin (Apps → search "Docker Compose Manager") or plain `docker compose` over SSH.
-
-**Git:** the install and update steps run `git` on the server. Our Unraid box already has it (`git --version` → 2.55.0, checked 2026-10-03), so there's nothing to install. If it's ever missing, for example after an OS change, `scripts/update.sh` stops with a clear message.
-
-**First install** (SSH into Unraid):
-
-```bash
-mkdir -p /mnt/user/appdata/navi
-cd /mnt/user/appdata/navi
-git clone <repo-url> repo
-cd repo
-cp .env.example .env
-nano .env
-#   Fill in the Discord values and a real POSTGRES_PASSWORD
-#   DATA_DIR=/mnt/user/appdata/navi/postgres
-#   TZ=America/Chicago (the default)
-docker compose up -d --build
-docker compose logs -f navi     # look for "Hey! Listen! Logged in as Navi#1234"
-```
-
-If you use Compose Manager, add a stack named `navi` so it shows up in the Docker tab. Set **Compose Source** to **External folder** → `/mnt/user/appdata/navi/repo`, and **External ENV File Path** to `/mnt/user/appdata/navi/repo/.env`. The compose file sets `name: navi`, so the stack started from the command line and the one in Compose Manager are the same.
-
-**Updating** after pushing changes:
-
-```bash
-bash /mnt/user/appdata/navi/repo/scripts/update.sh
-```
-
-**Auto-update on push.** `scripts/auto-update.sh` checks GitHub and runs `update.sh` only when `main` has new commits. To schedule it, open **Settings → User Scripts → Add New Script** (install the User Scripts plugin from Apps if it's missing). Name the script `navi-auto-update` and set its contents to:
-
-```bash
-#!/bin/bash
-bash /mnt/user/appdata/navi/repo/scripts/auto-update.sh
-```
-
-Set the schedule to **Custom** with `*/5 * * * *` (every 5 minutes). Each push goes live within about 5 minutes. When nothing has changed, the script does nothing and prints nothing.
-
-**Notes**
-- Postgres data lives in `DATA_DIR` (under appdata), so it's included in Unraid's appdata backups. `.env` stays on the server and is never committed.
-- `POSTGRES_PORT` (default 5433) exposes the database on your LAN so you can query it from your PC with pgAdmin or DBeaver. Remove the `ports:` block in `docker-compose.yml` if you don't want that.
-- Both containers use `restart: unless-stopped`, so they come back after an Unraid reboot or array restart.
-
-**Later option: build in CI, pull on Unraid.** Instead of building on the server, a GitHub Actions workflow could build the image on every push to `main` and publish it to GitHub Container Registry (`ghcr.io/<user>/navi`). The compose file would then use `image:` instead of `build:`, and updating would just be `docker compose pull && docker compose up -d`. The server would then need neither git nor build tools, and a broken build never reaches it. It isn't set up yet.
