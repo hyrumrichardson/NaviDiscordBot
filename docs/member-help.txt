@@ -8,8 +8,6 @@ When Navi posts a poll, react with the number of **every** time that works for y
 If you voted for the winning time, Navi DMs you **2 days before** and at **9 AM on rehearsal day**. If your DMs are closed, Navi mentions you in the channel instead.
 
 **Commands**
-`/navi rehearsal`: start a rehearsal poll (Final Bossa members only). Pick up to 10 days, choose a time for each, then hit **Send poll**. If there's a tie or fewer than 4 votes, Navi DMs you to decide.
+`/navi rehearsal`: start a rehearsal poll. Pick up to 10 days, choose a time for each, then hit **Send poll**. If there's a tie or fewer than 4 votes, Navi DMs you to decide the final outcome.
 `/navi next`: shows the next rehearsal, how many people are on the reminder list, and whether you're one of them. It also shows any poll that's still open.
 `/navi rsvp`: missed the poll? This adds you to the reminder list for the next rehearsal.
-
-Only you can see Navi's replies to these.
