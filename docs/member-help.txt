@@ -12,6 +12,4 @@ If you voted for the winning time, Navi DMs you **2 days before** and at **9 AM 
 `/navi next`: shows the next rehearsal, how many people are on the reminder list, and whether you're one of them. It also shows any poll that's still open.
 `/navi rsvp`: missed the poll? This adds you to the reminder list for the next rehearsal.
 
-Only you can see Navi's replies to these. Commands marked *(admin)* are for band admins.
-
-*It's dangerous to go alone!*
+Only you can see Navi's replies to these.
