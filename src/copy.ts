@@ -5,30 +5,26 @@
 
 export const copy = {
   pollPosted: [
-    "**Hey! Listen!** 🧚 {role}, when can you make rehearsal? *It's dangerous to go alone!* Vote for every time that works. Poll closes in {hours} hours.",
-    "**Dawn of the First Day.** ⏳ *-{hours} Hours Remain-* {role}, vote for every rehearsal time that works for you!",
-    "**Hello!** 🧚 {role}, the Great Deku Tree needs to know when you can rehearse. Poll closes in {hours} hours.",
+    "**Hey** {role}! When can you make rehearsal? Vote for every time that works. Poll closes in {hours} hours.",
   ],
   pollClosed: [
-    "**Look!** 👀 The Great Deku Tree has spoken. Rehearsal will be **{when}**.",
-    "**Hey! Listen!** Rehearsal is set for **{when}**. *You got the Rehearsal Time!* 🎶",
+    "**Look!** Rehearsal will be **{when}**.",
   ],
   pollNoVotes: [
-    "*You've met with a terrible fate, haven't you?* Nobody voted. Try another set of dates?",
+    "Nobody voted. Try another set of dates?",
   ],
   pollSent: [
-    "**Hey! Listen!** 🧚 The poll is up in {channel}. I'll post the result in {hours} hours.",
+    "**Hey! Listen!** The poll is up in {channel}. I'll post the result in {hours} hours.",
   ],
   // DMs to the poll creator when Navi needs a decision.
   decisionTie: [
-    "**Hey! Listen!** 🧚 Your rehearsal poll in {channel} ended in a **tie**. Which time should it be?",
-    "**Look!** Two paths through the Lost Woods! Your rehearsal poll in {channel} is a **tie**. Pick one:",
+    "Your rehearsal poll in {channel} ended in a **tie**. Which time should it be?",
   ],
   decisionLowTurnout: [
-    "**Watch out!** ⚔️ Only **{count}** can make the top time from your poll in {channel}: **{when}**. Still want to rehearse?",
+    "**Watch out!** Only **{count}** can make the top time from your poll in {channel}: **{when}**. Still want to rehearse?",
   ],
   decisionLocked: [
-    "*You got the Rehearsal Time!* 🎶 *(da-na-na-naaa)* **{when}** it is. I've told the channel.",
+    "Rehearsal time is **{when}**. I've told the channel.",
   ],
   decisionDropped: [
     "Got it. I've told the channel there's no rehearsal from this poll.",
@@ -42,7 +38,8 @@ export const copy = {
   pollDropped: [
     "*You've met with a terrible fate, haven't you?* Not enough heroes for this one, so there's **no rehearsal** from this poll.",
   ],
-  // Posted in the channel when someone's DMs are closed. The mentions go on the line below.
+  // Posted in the channel when someone's DMs are closed. Navi puts the mentions in front of
+  // this line and the actual message on the line below it.
   dmFallback: [
     "**Hey! Listen!** I couldn't DM you, so here it is:",
   ],
@@ -50,29 +47,25 @@ export const copy = {
     "**Hey!** This panel fell asleep. Run `/navi rehearsal` again.",
   ],
   nextRehearsal: [
-    "**Look!** 🧚 The next rehearsal is **{when}**.",
     "**Hey! Listen!** Next rehearsal: **{when}**.",
   ],
   noRehearsal: [
-    "**Hmm...** There's no rehearsal scheduled yet. *The Great Deku Tree is still thinking.*",
+    "**Hmm...** There's no rehearsal scheduled yet.",
   ],
   rsvpAlready: [
     "**Hey!** You're already on the list for **{when}**. I'll remind you!",
   ],
   remindBefore: [
-    "**Hey! Listen!** Rehearsal is in two days: **{when}**. *Dawn of the Second-to-Last Day, -48 Hours Remain-* Dust off your ocarina. 🎵",
-    "**Look!** 🧚 Rehearsal is coming up **{when}**. Better start practicing Saria's Song.",
+    "**Hey! Listen!** Rehearsal is in two days: **{when}**.",
   ],
   remindDayOf: [
-    "**Watch out!** ⚔️ *Dawn of the Final Day.* Rehearsal is **today, {time}**. *It's dangerous to go alone, take this:* 🎼",
-    "**Hello!** Kaepora Gaebora here. Hoo hoo! Rehearsal is **today, {time}**. *Did you get all that? Do you want to hear what I said again?*",
+    "**Watch out!** Rehearsal is **today, {time}**.",
   ],
   cancelled: [
     "*Well, excuse me, Princess!* Rehearsal on **{when}** is **cancelled**.",
   ],
   pollCancelled: [
     "*Well, excuse me, Princess!* This rehearsal poll is **cancelled**. No need to vote.",
-    "**Hey!** The Great Deku Tree changed its mind. This rehearsal poll is **cancelled**.",
   ],
   nothingToCancel: [
     "**Look!** There's nothing to cancel. No upcoming rehearsals and no open polls.",
@@ -81,7 +74,7 @@ export const copy = {
     "**Hey!** That one was already closed or cancelled. Nothing changed.",
   ],
   rsvpConfirmed: [
-    "*You got the Rehearsal Reminder!* 🎶 *(da-na-na-naaa)* See you **{when}**.",
+    "*You got the Rehearsal Reminder!* See you **{when}**.",
   ],
   notBuiltYet: [
     "**Hey!** This part of the forest isn't finished yet. Come back later!",
