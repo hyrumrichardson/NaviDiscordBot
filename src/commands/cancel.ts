@@ -18,7 +18,7 @@ import {
   rehearsals,
   scheduledJobs,
 } from "../db/schema.js";
-import { rehearsalChannelId } from "../rehearsals.js";
+import { markPollMessage, POLL_CANCELLED_NOTE, rehearsalChannelId } from "../rehearsals.js";
 import { formatWindow } from "../time.js";
 
 export const CANCEL_MODAL_ID = "navi-cancel";
@@ -140,10 +140,10 @@ async function cancelPoll(client: Client, pollId: number): Promise<string | null
 
   const channel = await client.channels.fetch(poll.channelId).catch(() => null);
   if (channel?.isSendable()) {
-    // End the native poll so people stop voting. The message may have been deleted.
+    // Mark the poll message so nobody keeps reacting. The message may have been deleted.
     if (poll.messageId) {
       const message = await channel.messages.fetch(poll.messageId).catch(() => null);
-      if (message?.poll && !message.poll.resultsFinalized) await message.poll.end().catch(() => {});
+      if (message) await markPollMessage(message, POLL_CANCELLED_NOTE);
     }
     await channel.send(say("pollCancelled"));
   }

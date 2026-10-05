@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   type Client,
   DiscordAPIError,
+  type Message,
   RESTJSONErrorCodes,
   type SendableChannels,
 } from "discord.js";
@@ -148,6 +149,30 @@ export async function nextRehearsal(): Promise<Rehearsal | null> {
   return rehearsal ?? null;
 }
 
+// --- The poll message -----------------------------------------------------------
+
+// Polls are a normal message with one reaction per option: 1️⃣–🔟, or 👍 when there's
+// only one option.
+export const POLL_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"] as const;
+export const SINGLE_OPTION_EMOJI = "👍";
+export const pollEmoji = (index: number, optionCount: number): string =>
+  optionCount === 1 ? SINGLE_OPTION_EMOJI : POLL_EMOJIS[index];
+
+export const POLL_CLOSED_NOTE = "🔒 *Voting is closed.*";
+export const POLL_CANCELLED_NOTE = "🚫 *This poll was cancelled.*";
+
+// Discord can return keycap emoji with or without the U+FE0F variation selector.
+const sameEmoji = (a: string | null, b: string) =>
+  !!a && a.replace(/️/g, "") === b.replace(/️/g, "");
+
+// Reactions can't be locked, so add a closing line to the poll message instead (once).
+export async function markPollMessage(message: Message, note: string) {
+  if (message.content.includes(note)) return;
+  await message
+    .edit({ content: `${message.content}\n\n${note}`, allowedMentions: { parse: [] } })
+    .catch((err) => console.warn(`Couldn't mark poll message ${message.id}:`, err));
+}
+
 // --- Closing a poll -------------------------------------------------------------
 
 const optionWhen = (o: PollOption) => formatWindow(o.startsAt, o.endsAt);
@@ -166,33 +191,28 @@ export async function closePoll(client: Client, pollId: number) {
 
   // Network errors throw so the job retries. A deleted channel or message means
   // there's nothing left to count.
-  let message;
+  let message: Message;
   try {
     const channel = await client.channels.fetch(poll.channelId);
     if (!channel?.isTextBased() || !poll.messageId) throw new Error("Poll channel isn't a text channel");
-    message = await channel.messages.fetch(poll.messageId);
+    // force: skip the cache so the reactions are current.
+    message = await channel.messages.fetch({ message: poll.messageId, force: true });
   } catch (err) {
     if (!isUnknownResource(err)) throw err;
     console.warn(`Poll ${pollId}: message or channel was deleted. Marking it cancelled.`);
     await db.update(rehearsalPolls).set({ status: "cancelled" }).where(eq(rehearsalPolls.id, pollId));
     return;
   }
-  const discordPoll = message.poll;
-  if (!discordPoll) throw new Error(`Poll ${pollId}: message ${message.id} has no poll`);
 
-  // The job can run a few seconds before Discord's own expiry. End it so no votes sneak in.
-  if (!discordPoll.resultsFinalized && (discordPoll.expiresTimestamp ?? 0) > Date.now()) {
-    await discordPoll.end().catch(() => {});
-  }
-
+  // A vote is a reaction with the option's emoji. Navi's own starter reactions don't count.
   const votes = new Map<number, string[]>();
   for (const option of options) {
     const voterIds: string[] = [];
-    const answer = discordPoll.answers.get(option.answerId);
-    if (answer) {
+    const reaction = message.reactions.cache.find((r) => sameEmoji(r.emoji.name, option.emoji));
+    if (reaction) {
       let after: string | undefined;
       for (;;) {
-        const page = await answer.voters.fetch({ limit: 100, after });
+        const page = await reaction.users.fetch({ limit: 100, after });
         for (const user of page.values()) if (!user.bot) voterIds.push(user.id);
         if (page.size < 100) break;
         after = page.lastKey();
@@ -200,6 +220,7 @@ export async function closePoll(client: Client, pollId: number) {
     }
     votes.set(option.id, voterIds);
   }
+  await markPollMessage(message, POLL_CLOSED_NOTE);
 
   const snapshot = [...votes].flatMap(([pollOptionId, ids]) => ids.map((userId) => ({ pollOptionId, userId })));
   if (snapshot.length > 0) await db.insert(pollVotes).values(snapshot).onConflictDoNothing();

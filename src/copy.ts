@@ -7,6 +7,17 @@ export const copy = {
   pollPosted: [
     "**Hey** {role}! When can you make rehearsal? Vote for every time that works. Poll closes in {hours} hours.",
   ],
+  // Used instead of pollPosted when the poll has only one day.
+  pollPostedSingle: [
+    "**Hey** {role}! Can you make it to rehearsal at this time? Poll closes in {hours} hours.",
+  ],
+  // The last line of the poll message.
+  pollHowToVote: [
+    "*React with the number of every time that works for you.*",
+  ],
+  pollHowToVoteSingle: [
+    "*React with 👍 if you can make it.*",
+  ],
   pollClosed: [
     "**Look!** Rehearsal will be **{when}**.",
   ],

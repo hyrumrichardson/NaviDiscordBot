@@ -29,9 +29,7 @@ import {
   zonedDate,
   zonedToUtc,
 } from "../time.js";
-
-// Poll answers are numbered in date order. Native polls allow at most 10 answers.
-export const POLL_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"] as const;
+import { POLL_EMOJIS, pollEmoji } from "../rehearsals.js";
 
 // Component custom IDs: navi-reh:<draftId>:<action>
 export const REHEARSAL_PREFIX = "navi-reh:";
@@ -88,7 +86,7 @@ function render(draftId: string, draft: Draft) {
   const lines = days.map((date, i) => {
     const { startsAt, endsAt } = windowInstants(date, draft.days.get(date)!);
     const marker = date === draft.editing ? "  ◀ *editing*" : "";
-    return `${POLL_EMOJIS[i]} ${formatWindow(startsAt, endsAt)}${marker}`;
+    return `${pollEmoji(i, days.length)} ${formatWindow(startsAt, endsAt)}${marker}`;
   });
 
   const content = [
@@ -129,7 +127,7 @@ function render(draftId: string, draft: Draft) {
           new StringSelectMenuOptionBuilder()
             .setValue(date)
             .setLabel(dayLabel(date))
-            .setEmoji(POLL_EMOJIS[i])
+            .setEmoji(pollEmoji(i, days.length))
             .setDefault(date === draft.editing),
         ),
       );
@@ -334,22 +332,25 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
     return;
   }
 
-  const message = await channel.send({
-    content: say("pollPosted", { role: `<@&${config.memberRoleId}>`, hours }),
-    allowedMentions: { roles: [config.memberRoleId] },
-    poll: {
-      question: { text: "When can you make rehearsal? 🎵" },
-      answers: windows.map((w, i) => ({ text: formatWindow(w.startsAt, w.endsAt), emoji: POLL_EMOJIS[i] })),
-      duration: hours,
-      allowMultiselect: true,
-    },
-  });
+  // A normal message with one line per option. Votes are reactions (see closePoll).
+  const single = windows.length === 1;
+  const emojis = windows.map((_, i) => pollEmoji(i, windows.length));
+  const vars = { role: `<@&${config.memberRoleId}>`, hours };
+  const content = [
+    say(single ? "pollPostedSingle" : "pollPosted", vars),
+    "",
+    ...windows.map((w, i) => `${emojis[i]} **${formatWindow(w.startsAt, w.endsAt)}**`),
+    "",
+    say(single ? "pollHowToVoteSingle" : "pollHowToVote"),
+  ].join("\n");
 
-  // Discord numbers answers in the order sent; read them back rather than assume.
-  const answerIds = message.poll ? [...message.poll.answers.keys()] : [];
-  const closesAt = message.poll?.expiresAt ?? estimatedClose;
+  const message = await channel.send({ content, allowedMentions: { roles: [config.memberRoleId] } });
+  const closesAt = new Date(message.createdTimestamp + hours * 3_600_000);
 
   try {
+    // Navi adds each reaction first so voting is one tap.
+    for (const emoji of emojis) await message.react(emoji);
+
     await db.transaction(async (tx) => {
       const [poll] = await tx
         .insert(rehearsalPolls)
@@ -364,8 +365,8 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
       await tx.insert(pollOptions).values(
         windows.map((w, i) => ({
           pollId: poll.id,
-          answerId: answerIds[i] ?? i + 1,
-          emoji: POLL_EMOJIS[i],
+          answerId: i + 1,
+          emoji: emojis[i],
           startsAt: w.startsAt,
           endsAt: w.endsAt,
         })),
@@ -373,7 +374,7 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
       await tx.insert(scheduledJobs).values({ kind: "close_poll", refId: poll.id, runAt: closesAt });
     });
   } catch (err) {
-    // Don't leave a poll up that Navi will never close.
+    // Don't leave a poll up that Navi will never close (e.g. missing Add Reactions permission).
     await message.delete().catch(() => {});
     throw err;
   }

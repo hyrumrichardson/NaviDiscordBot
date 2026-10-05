@@ -12,7 +12,7 @@ The project skeleton is in place. The bot boots, runs database migrations, regis
 
 **Phase 1 is built:** `/navi rehearsal`, `/navi next`, `/navi cancel`, `/navi rsvp`, closing the poll (including the tie and low-turnout DMs to the poll creator), and both reminder DMs. Most of the logic lives in `src/rehearsals.ts`. The rehearsal panel is in `src/commands/rehearsal.ts`.
 
-To test locally without pinging the band, point `.env` at the test server and set `POLL_DURATION_HOURS=1`, the shortest poll Discord allows.
+To test locally without pinging the band, point `.env` at the test server and use `/navi debug-close-poll` and `/navi debug-send-reminders` instead of waiting for the timers.
 
 ## Repo layout
 
@@ -45,7 +45,7 @@ To test locally without pinging the band, point `.env` at the test server and se
 | Piece        | Choice                                    | Why |
 |--------------|-------------------------------------------|-----|
 | Language     | TypeScript (Node 22)                      | Best-supported Discord library |
-| Discord lib  | [discord.js](https://discord.js.org) v14  | Supports modals, select menus, buttons and native polls |
+| Discord lib  | [discord.js](https://discord.js.org) v14  | Supports modals, select menus, buttons and reactions |
 | Database     | PostgreSQL 16                             | Stores rehearsals, votes and reminders, and later songs and set lists |
 | DB access    | Drizzle ORM + migrations                  | Lightweight and typed |
 | Scheduling   | Jobs stored in a Postgres table, checked every minute | Reminders still go out after a restart |
@@ -68,13 +68,19 @@ To test locally without pinging the band, point `.env` at the test server and se
 3. **Admin adjusts times, one day at a time.** Each day has its own time window. The admin picks a day from a second dropdown ("Edit time for…"), then picks a time from the **Time** dropdown. It lists 3-hour windows from 10 AM–1 PM through 6–9 PM. **Custom…** opens a pop-up where they can type any time between 1 and 8 hours long, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime: `6-9` means evening and `10-1` means late morning. The other days keep their own times. **Use this time for all days** copies the current day's time to every day.
    - The panel is held in memory for 30 minutes. If the bot restarts, run the command again.
    - Submit refuses any day that would start before the poll closes.
-4. **Admin hits Submit.** Navi posts a **native Discord poll** in the channel:
-   - Message: `@Final Bossa Member` plus a Zelda-flavoured intro (see [Voice](#voice--copy))
-   - One answer per date/time, numbered in date order: 1️⃣ 2️⃣ 3️⃣ … 🔟
-   - "Poll closes in 24 hours"
-   - Multiple answers allowed (people can say yes to every day that works)
-   - Native polls allow at most **10 answers**. That's plenty for one rehearsal.
-5. **Poll closes after 24 hours.** Navi reads the votes and posts the result in **the same channel**:
+4. **Admin hits Submit.** Navi posts an **emoji poll** in the channel. It's a normal message, not a Discord poll:
+   ```
+   Hey @Final Bossa Member! When can you make rehearsal? Vote for every time that works. Poll closes in 24 hours.
+
+   1️⃣ Thu, Oct 8, 2:00 – 5:00 PM
+   2️⃣ Sat, Oct 10, 2:00 – 5:00 PM
+
+   React with the number of every time that works for you.
+   ```
+   - Navi adds the reactions itself (1️⃣ 2️⃣ … 🔟), so voting is one tap. People can react to as many times as work for them.
+   - **One day only:** the option is 👍 instead of 1️⃣, and the message asks *"Can you make it to rehearsal at this time?"* (`pollPostedSingle` in `copy.ts`).
+   - Up to **10 days** per poll.
+5. **Poll closes after 24 hours.** Navi counts the reactions (ignoring its own) and adds *"🔒 Voting is closed."* to the poll message. Reactions can't be locked, so anything added after that is ignored. Navi then posts the result in **the same channel**:
    *"Rehearsal will be **Sat Oct 10, 2–5 PM**."*
    - The winner is the answer with the most votes.
    - **Tie:** Navi sends the person who set up the poll a DM with one button per tied time, and waits for them to pick one.
@@ -90,11 +96,11 @@ To test locally without pinging the band, point `.env` at the test server and se
 - `/navi next`: shows the next scheduled rehearsal.
 - `/navi cancel` *(built)*: admin only. Opens a modal with a dropdown of everything that can be cancelled: every upcoming scheduled rehearsal **and** every poll still taking votes (up to 25).
   - **Rehearsal:** marks it cancelled, deletes its pending reminders, and posts in the poll's channel, mentioning everyone who was expecting reminders.
-  - **Open poll:** marks it cancelled, deletes its `close_poll` job, ends the Discord poll so nobody keeps voting, and posts a notice in the channel.
+  - **Open poll:** marks it cancelled, deletes its `close_poll` job, adds *"🚫 This poll was cancelled."* to the poll message, and posts a notice in the channel.
   - If nothing can be cancelled, Navi says so instead of opening the modal.
 - `/navi rsvp`: lets someone who missed the poll opt in to reminders for the upcoming rehearsal.
 - `/navi debug-send-reminders [reminder]`: Anyone with **Manage Server** or the `ADMIN_ROLE_ID` role can use it. Sends the 48-hour (default) or day-of reminder **right now** for every upcoming rehearsal, using the same function as the scheduler, then tells you privately how many people were DMed. The scheduled reminders still go out as normal.
-- `/navi debug-close-poll`: same permissions. Closes **every open poll right now** by calling `closePoll()`, the function the scheduled job runs when a poll's time is up. It ends the Discord poll early, counts the votes, then posts the result or DMs the creator about a tie or low turnout. It then tells you privately what happened to each poll. The poll's scheduled close job is marked done, so it won't run again.
+- `/navi debug-close-poll`: same permissions. Closes **every open poll right now** by calling `closePoll()`, the function the scheduled job runs when a poll's time is up. It counts the reactions, marks the poll message closed, then posts the result or DMs the creator about a tie or low turnout. It then tells you privately what happened to each poll. The poll's scheduled close job is marked done, so it won't run again.
 
 ### Data model (phase 1)
 
@@ -182,7 +188,7 @@ The copy lives in one file (`src/copy.ts`) so anyone in the band can add lines.
 ## Discord setup (one time)
 
 1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot. Copy the **token** and **application ID**.
-2. Invite it with the `bot` + `applications.commands` scopes and these permissions: View Channels, Send Messages, Send Polls, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs that last one to ping the member role, unless the role itself is set to "Allow anyone to @mention this role".
+2. Invite it with the `bot` + `applications.commands` scopes and these permissions: View Channels, Send Messages, **Add Reactions**, Read Message History, and **Mention @everyone, @here, and All Roles**. Navi needs that last one to ping the member role, unless the role itself is set to "Allow anyone to @mention this role".
 3. Create the **Final Bossa Member** role in the server and copy its ID (Developer Mode → right-click → Copy Role ID).
 
 ## Local development

@@ -10,7 +10,8 @@ import { pool, runMigrations } from "./db/client.js";
 import { startScheduler } from "./scheduler.js";
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessagePolls],
+  // Reactions are read over REST when a poll closes, so no reaction intent is needed.
+  intents: [GatewayIntentBits.Guilds],
 });
 
 client.once(Events.ClientReady, async (c) => {

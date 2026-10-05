@@ -33,7 +33,7 @@ export const pollOptions = pgTable("poll_options", {
   pollId: integer("poll_id")
     .notNull()
     .references(() => rehearsalPolls.id, { onDelete: "cascade" }),
-  // Discord's native poll answer_id (1-10)
+  // Position in the poll message (1-10). Votes are reactions with `emoji`.
   answerId: integer("answer_id").notNull(),
   emoji: text("emoji").notNull(),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),

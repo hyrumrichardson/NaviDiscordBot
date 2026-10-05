@@ -38,7 +38,7 @@ export async function handleDebugSendReminders(interaction: ChatInputCommandInte
 }
 
 // /navi debug-close-poll: close every open poll now, as if its time had run out.
-// Ends the Discord poll early, then does exactly what the close_poll job does.
+// Does exactly what the close_poll job does: count reactions, mark the message closed, decide.
 export async function handleDebugClosePoll(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
