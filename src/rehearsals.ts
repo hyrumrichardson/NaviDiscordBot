@@ -316,12 +316,23 @@ export async function finalizePoll(client: Client, pollId: number, optionId: num
     }
 
     await queueReminders(rehearsal.id, option.startsAt, tx);
-    return { poll, option };
+    return { poll, option, attendeeIds: voters.map((v) => v.userId) };
   });
   if (!result) return null;
 
+  // List who voted for the winning time. Mentions show as names; postInPollChannel
+  // blocks pings, so nobody gets notified.
   const when = optionWhen(result.option);
-  await postInPollChannel(client, result.poll, say("pollClosed", { when }));
+  const lines = [say("pollClosed", { when })];
+  if (result.attendeeIds.length > 0) {
+    lines.push(
+      say("pollAttendees", {
+        count: result.attendeeIds.length,
+        people: result.attendeeIds.map(mention).join(", "),
+      }),
+    );
+  }
+  await postInPollChannel(client, result.poll, lines.join("\n"));
   return when;
 }
 

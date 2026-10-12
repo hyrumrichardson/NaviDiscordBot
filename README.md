@@ -48,7 +48,7 @@ Navi's replies to commands are private (only you see them). The poll, its result
    ```
    With only one day, the option is 👍 and the message asks *"Can you make it to rehearsal at this time?"*
 5. **After 24 hours, Navi counts the reactions** (ignoring its own) and adds *🔒 Voting is closed.* to the poll. Discord can't lock reactions, so later ones are ignored. Then:
-   - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll.
+   - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll, with a line listing everyone who voted for that time. The names don't ping anyone.
    - **A tie**: Navi DMs the creator one button per tied time.
    - **Fewer than 4 votes** (`MIN_TURNOUT`): Navi DMs the creator to **keep** the time or choose **No rehearsal**.
    - **No votes**: Navi says so in the channel.

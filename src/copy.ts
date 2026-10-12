@@ -1,7 +1,7 @@
 // Everything Navi says lives here. Add lines freely. Navi picks one at random for each message.
 // Placeholders: {when} = date + time ("Sat, Oct 10, 2:00 – 5:00 PM"), {time} = time only,
 // {role} = member role mention, {hours} = hours left, {channel} = channel mention,
-// {count} = number of people.
+// {count} = number of people, {people} = list of names.
 
 export const copy = {
   pollPosted: [
@@ -20,6 +20,10 @@ export const copy = {
   ],
   pollClosed: [
     "**Look!** Rehearsal will be **{when}**.",
+  ],
+  // The line under pollClosed listing who voted for the winning time. {people} = their names.
+  pollAttendees: [
+    "**Attending ({count}):** {people}",
   ],
   pollNoVotes: [
     "Nobody voted. Try another set of dates?",
