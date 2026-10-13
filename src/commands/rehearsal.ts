@@ -29,7 +29,7 @@ import {
   zonedDate,
   zonedToUtc,
 } from "../time.js";
-import { POLL_EMOJIS, pollEmoji } from "../rehearsals.js";
+import { CANT_MAKE_EMOJI, POLL_EMOJIS, pollEmoji } from "../rehearsals.js";
 
 // Component custom IDs: navi-reh:<draftId>:<action>
 export const REHEARSAL_PREFIX = "navi-reh:";
@@ -332,7 +332,8 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
     return;
   }
 
-  // A normal message with one line per option. Votes are reactions (see closePoll).
+  // A normal message with one line per option, plus a ❌ "can't make any" line. Votes are
+  // reactions (see closePoll). ❌ isn't a poll option, so it's never counted as a time.
   const single = windows.length === 1;
   const emojis = windows.map((_, i) => pollEmoji(i, windows.length));
   const vars = { role: `<@&${config.memberRoleId}>`, hours };
@@ -340,6 +341,7 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
     say(single ? "pollPostedSingle" : "pollPosted", vars),
     "",
     ...windows.map((w, i) => `${emojis[i]} **${formatWindow(w.startsAt, w.endsAt)}**`),
+    `${CANT_MAKE_EMOJI} ${say(single ? "pollCantMakeSingle" : "pollCantMake")}`,
     "",
     say(single ? "pollHowToVoteSingle" : "pollHowToVote"),
   ].join("\n");
@@ -349,7 +351,7 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
 
   try {
     // Navi adds each reaction first so voting is one tap.
-    for (const emoji of emojis) await message.react(emoji);
+    for (const emoji of [...emojis, CANT_MAKE_EMOJI]) await message.react(emoji);
 
     await db.transaction(async (tx) => {
       const [poll] = await tx

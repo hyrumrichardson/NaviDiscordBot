@@ -11,6 +11,13 @@ export const copy = {
   pollPostedSingle: [
     "**Hey** {role}! Can you make it to rehearsal at this time? Poll closes in {hours} hours.",
   ],
+  // The ❌ line under the poll's times. Votes on it aren't counted toward any time.
+  pollCantMake: [
+    "Can't make any of these",
+  ],
+  pollCantMakeSingle: [
+    "Can't make it",
+  ],
   // The last line of the poll message.
   pollHowToVote: [
     "*React with the number of every time that works for you.*",

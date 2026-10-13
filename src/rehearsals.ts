@@ -155,6 +155,8 @@ export async function nextRehearsal(): Promise<Rehearsal | null> {
 // only one option.
 export const POLL_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"] as const;
 export const SINGLE_OPTION_EMOJI = "👍";
+// The last line of every poll: "Can't make any of these". Not a poll option, never counted.
+export const CANT_MAKE_EMOJI = "❌";
 export const pollEmoji = (index: number, optionCount: number): string =>
   optionCount === 1 ? SINGLE_OPTION_EMOJI : POLL_EMOJIS[index];
 

@@ -2,7 +2,7 @@
 Navi schedules our rehearsals and sends reminders. Here's how it works:
 
 **Voting on rehearsal polls**
-When Navi posts a poll, react with the number of **every** time that works for you (or 👍 if there's only one time). Voting closes after 24 hours, and Navi posts the winning time in the same channel.
+When Navi posts a poll, react with the number of **every** time that works for you (or 👍 if there's only one time). If none of the times work, react with ❌. Voting closes after 24 hours, and Navi posts the winning time in the same channel.
 
 **Reminders**
 If you voted for the winning time, Navi DMs you **2 days before** and at **9 AM on rehearsal day**. If your DMs are closed, Navi mentions you in the channel instead.

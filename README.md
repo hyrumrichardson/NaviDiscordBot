@@ -43,9 +43,11 @@ Navi's replies to commands are private (only you see them). The poll, its result
 
    1️⃣ Thu, Oct 8, 2:00 – 5:00 PM
    2️⃣ Sat, Oct 10, 2:00 – 5:00 PM
+   ❌ Can't make any of these
 
    React with the number of every time that works for you.
    ```
+   Every poll ends with a **❌ Can't make any of these** line ("Can't make it" on a one-day poll), so people can say no. ❌ reactions are never counted toward a time.
    With only one day, the option is 👍 and the message asks *"Can you make it to rehearsal at this time?"*
 5. **After 24 hours, Navi counts the reactions** (ignoring its own) and adds *🔒 Voting is closed.* to the poll. Discord can't lock reactions, so later ones are ignored. Then:
    - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll, with a line listing everyone who voted for that time. The names don't ping anyone.
