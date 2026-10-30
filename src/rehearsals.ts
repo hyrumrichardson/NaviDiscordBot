@@ -7,8 +7,13 @@ import {
   type Client,
   DiscordAPIError,
   type Message,
+  type MessageReaction,
+  type PartialMessage,
+  type PartialMessageReaction,
+  type PartialUser,
   RESTJSONErrorCodes,
   type SendableChannels,
+  type User,
 } from "discord.js";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { config } from "./config.js";
@@ -173,6 +178,81 @@ export async function markPollMessage(message: Message, note: string) {
   await message
     .edit({ content: `${message.content}\n\n${note}`, allowedMentions: { parse: [] } })
     .catch((err) => console.warn(`Couldn't mark poll message ${message.id}:`, err));
+}
+
+// --- Navi's starter reactions ---------------------------------------------------
+
+// Navi adds every emoji so voting is one tap, but Discord counts that reaction in the number
+// under it. Once someone else uses an emoji, Navi takes its own back. If the last vote is
+// taken back, Discord drops the emoji and Navi adds it again. It lands at the end of the row,
+// since Discord orders reactions by when they were first added.
+const reactionQueues = new Map<string, Promise<void>>();
+
+// Runs syncs one at a time per message, so each run sees the result of the one before it.
+// Never rejects: failures are logged.
+function enqueueSync(messageId: string, task: () => Promise<void>): Promise<void> {
+  const run = (reactionQueues.get(messageId) ?? Promise.resolve())
+    .then(task)
+    .catch((err) => console.warn(`Couldn't sync Navi's reactions on message ${messageId}:`, err));
+  reactionQueues.set(messageId, run);
+  void run.finally(() => {
+    if (reactionQueues.get(messageId) === run) reactionQueues.delete(messageId);
+  });
+  return run;
+}
+
+// `message` must be freshly fetched so the counts are current. Missing emojis are added
+// in the order given.
+async function syncEmojis(message: Message, emojis: string[]) {
+  for (const emoji of emojis) {
+    const reaction = message.reactions.cache.find((r) => sameEmoji(r.emoji.name, emoji));
+    if (!reaction) await message.react(emoji);
+    else if (reaction.me && reaction.count > 1) await reaction.users.remove(message.client.user.id);
+  }
+}
+
+// Called for every reaction added or removed.
+export function syncStarterReaction(
+  reaction: MessageReaction | PartialMessageReaction,
+  user: User | PartialUser,
+) {
+  if (user.id === reaction.client.user.id) return;
+  void enqueueSync(reaction.message.id, () => syncReaction(reaction.message, reaction.emoji.name));
+}
+
+async function syncReaction(partial: Message | PartialMessage, emojiName: string | null) {
+  const options = await db
+    .select({ emoji: pollOptions.emoji })
+    .from(pollOptions)
+    .innerJoin(rehearsalPolls, eq(pollOptions.pollId, rehearsalPolls.id))
+    .where(and(eq(rehearsalPolls.messageId, partial.id), eq(rehearsalPolls.status, "open")));
+  if (options.length === 0) return; // not an open poll
+  const emoji = [...options.map((o) => o.emoji), CANT_MAKE_EMOJI].find((e) => sameEmoji(emojiName, e));
+  if (!emoji) return;
+
+  // force: the cached counts may already be out of date.
+  await syncEmojis(await partial.fetch(true), [emoji]);
+}
+
+// On startup: fix every emoji on every open poll, to catch up on reactions that changed
+// while Navi was offline.
+export async function syncOpenPolls(client: Client) {
+  const polls = await db.select().from(rehearsalPolls).where(eq(rehearsalPolls.status, "open"));
+  for (const poll of polls) {
+    const messageId = poll.messageId;
+    if (!messageId) continue;
+    await enqueueSync(messageId, async () => {
+      const channel = await client.channels.fetch(poll.channelId);
+      if (!channel?.isTextBased()) return;
+      const message = await channel.messages.fetch({ message: messageId, force: true });
+      const options = await db
+        .select({ emoji: pollOptions.emoji })
+        .from(pollOptions)
+        .where(eq(pollOptions.pollId, poll.id))
+        .orderBy(asc(pollOptions.answerId));
+      await syncEmojis(message, [...options.map((o) => o.emoji), CANT_MAKE_EMOJI]);
+    });
+  }
 }
 
 // --- Closing a poll -------------------------------------------------------------

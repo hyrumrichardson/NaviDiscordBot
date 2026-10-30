@@ -1,7 +1,7 @@
 // Everything Navi says lives here. Add lines freely. Navi picks one at random for each message.
 // Placeholders: {when} = date + time ("Sat, Oct 10, 2:00 – 5:00 PM"), {time} = time only,
 // {role} = member role mention, {hours} = hours left, {channel} = channel mention,
-// {count} = number of people, {people} = list of names.
+// {count} = number of people, {people} = list of names, {user} = one person's name.
 
 export const copy = {
   pollPosted: [
@@ -18,12 +18,16 @@ export const copy = {
   pollCantMakeSingle: [
     "Can't make it",
   ],
-  // The last line of the poll message.
+  // The voting instructions near the end of the poll message.
   pollHowToVote: [
     "*React with the number of every time that works for you.*",
   ],
   pollHowToVoteSingle: [
     "*React with 👍 if you can make it.*",
+  ],
+  // The last line of the poll message. {user} = the poll's creator.
+  pollStartedBy: [
+    "*(poll started by {user})*",
   ],
   pollClosed: [
     "**Look!** Rehearsal will be **{when}**.",

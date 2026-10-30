@@ -46,9 +46,11 @@ Navi's replies to commands are private (only you see them). The poll, its result
    ❌ Can't make any of these
 
    React with the number of every time that works for you.
+   (poll started by @Hyrum)
    ```
    Every poll ends with a **❌ Can't make any of these** line ("Can't make it" on a one-day poll), so people can say no. ❌ reactions are never counted toward a time.
    With only one day, the option is 👍 and the message asks *"Can you make it to rehearsal at this time?"*
+   Once someone else reacts with an emoji, Navi removes its own reaction from it, so the number Discord shows is the real vote count. If everyone takes their vote back from an emoji, Navi adds that emoji again. Discord puts it at the end of the row. Navi can't do this while it's offline, so it checks every open poll when it starts up and fixes them.
 5. **After 24 hours, Navi counts the reactions** (ignoring its own) and adds *🔒 Voting is closed.* to the poll. Discord can't lock reactions, so later ones are ignored. Then:
    - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll, with a line listing everyone who voted for that time. The names don't ping anyone.
    - **A tie**: Navi DMs the creator one button per tied time.

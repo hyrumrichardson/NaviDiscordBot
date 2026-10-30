@@ -334,6 +334,7 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
 
   // A normal message with one line per option, plus a ❌ "can't make any" line. Votes are
   // reactions (see closePoll). ❌ isn't a poll option, so it's never counted as a time.
+  // The creator's mention shows their name but doesn't ping: allowedMentions only lets the role through.
   const single = windows.length === 1;
   const emojis = windows.map((_, i) => pollEmoji(i, windows.length));
   const vars = { role: `<@&${config.memberRoleId}>`, hours };
@@ -344,6 +345,7 @@ async function submit(interaction: MessageComponentInteraction, draftId: string,
     `${CANT_MAKE_EMOJI} ${say(single ? "pollCantMakeSingle" : "pollCantMake")}`,
     "",
     say(single ? "pollHowToVoteSingle" : "pollHowToVote"),
+    say("pollStartedBy", { user: `<@${draft.createdBy}>` }),
   ].join("\n");
 
   const message = await channel.send({ content, allowedMentions: { roles: [config.memberRoleId] } });

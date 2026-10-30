@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from "discord.js";
 import {
   handleComponent,
   handleModalSubmit,
@@ -8,12 +8,19 @@ import {
 import { config } from "./config.js";
 import { pool, runMigrations } from "./db/client.js";
 import { syncGuides } from "./guide.js";
+import { syncOpenPolls, syncStarterReaction } from "./rehearsals.js";
 import { startScheduler } from "./scheduler.js";
 
 const client = new Client({
-  // Reactions are read over REST when a poll closes, so no reaction intent is needed.
-  intents: [GatewayIntentBits.Guilds],
+  // Votes are counted over REST when a poll closes. The reaction events are only for
+  // taking back Navi's own starter reactions (see syncStarterReaction). The partials
+  // let those events fire for polls posted before a restart.
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessageReactions],
+  partials: [Partials.Message, Partials.Reaction, Partials.User],
 });
+
+client.on(Events.MessageReactionAdd, syncStarterReaction);
+client.on(Events.MessageReactionRemove, syncStarterReaction);
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Hey! Listen! Logged in as ${c.user.tag}`);
@@ -21,6 +28,8 @@ client.once(Events.ClientReady, async (c) => {
   startScheduler(c);
   // Re-sync the posted command guide with docs/member-help.txt (edits only if it changed).
   await syncGuides(c).catch((err) => console.error("[guide] Sync failed:", err));
+  // Fix Navi's starter reactions on open polls (reactions may have changed while it was offline).
+  await syncOpenPolls(c).catch((err) => console.error("Poll reaction sync failed:", err));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
