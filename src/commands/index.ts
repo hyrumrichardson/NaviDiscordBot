@@ -35,7 +35,7 @@ export const naviCommand = new SlashCommandBuilder()
     s.setName("cancel").setDescription("Cancel an upcoming rehearsal or open poll (admin)"),
   )
   .addSubcommand((s) =>
-    s.setName("rsvp").setDescription("Get reminders for the next rehearsal"),
+    s.setName("rsvp").setDescription("Tell the band you're coming to the next rehearsal and get reminders"),
   )
   .addSubcommand((s) =>
     s

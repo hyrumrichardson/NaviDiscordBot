@@ -14,13 +14,13 @@ Set lists and sheet music are planned for later ([Future phases](#future-phases-
 |---|---|---|
 | `/navi rehearsal` | Members | Opens a private panel to pick days and times, then posts a rehearsal poll. |
 | `/navi next` | Everyone | Shows the next rehearsal, whether you're on its reminder list, and any open polls. |
-| `/navi rsvp` | Everyone | Adds you to the reminder list for the next rehearsal (for anyone who missed the poll). |
+| `/navi rsvp` | Everyone | Adds you to the reminder list for the next rehearsal (for anyone who missed the poll). Navi also posts in the poll's channel that you're coming and how many people are attending, without pinging anyone. |
 | `/navi cancel` | Admins | Cancels an upcoming rehearsal or an open poll, picked from a dropdown. |
 | `/navi guide-channel channel:#ch` | Admins | Posts the command guide to a channel and keeps it up to date. |
 | `/navi debug-close-poll` | Admins | Closes every open poll right now, as if its time had run out. |
 | `/navi debug-send-reminders [reminder]` | Admins | Sends the 48-hour (default) or day-of reminder right now for every upcoming rehearsal. |
 
-Navi's replies to commands are private (only you see them). The poll, its result and cancellation notices are posted publicly in the channel.
+Navi's replies to commands are private (only you see them). The poll, its result, RSVP announcements and cancellation notices are posted publicly in the channel.
 
 **Who counts as what**
 - **Members**: people with the Final Bossa Member role (`MEMBER_ROLE_ID`). It's also the role polls ping, so the rest of the server isn't bothered.

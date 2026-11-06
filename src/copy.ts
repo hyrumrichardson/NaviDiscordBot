@@ -102,6 +102,10 @@ export const copy = {
   rsvpConfirmed: [
     "*You got the Rehearsal Reminder!* See you **{when}**.",
   ],
+  // Posted in the channel when someone new uses /navi rsvp. {count} includes them.
+  rsvpAnnounced: [
+    "**Hey! Listen!** {user} will be at rehearsal on **{when}**! That makes **{count}** attending.",
+  ],
   notBuiltYet: [
     "**Hey!** This part of the forest isn't finished yet. Come back later!",
   ],
