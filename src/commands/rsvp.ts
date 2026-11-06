@@ -1,17 +1,66 @@
-import { type ChatInputCommandInteraction, MessageFlags } from "discord.js";
-import { eq } from "drizzle-orm";
+import {
+  ActionRowBuilder,
+  type ChatInputCommandInteraction,
+  MessageFlags,
+  StringSelectMenuBuilder,
+  type StringSelectMenuInteraction,
+  StringSelectMenuOptionBuilder,
+} from "discord.js";
+import { and, eq, gt } from "drizzle-orm";
 import { say } from "../copy.js";
 import { db } from "../db/client.js";
-import { rehearsalAttendees, type rehearsals } from "../db/schema.js";
-import { nextRehearsal, rehearsalChannelId } from "../rehearsals.js";
+import { rehearsalAttendees, rehearsals } from "../db/schema.js";
+import { rehearsalChannelId, upcomingRehearsals } from "../rehearsals.js";
 import { formatWindow } from "../time.js";
 
-// Opt in to reminders for the next rehearsal (for anyone who missed the poll), and tell the
-// channel. Someone already on the list gets the private reply only, so repeats don't spam it.
+export const RSVP_SELECT_ID = "navi-rsvp";
+// Select menus hold at most 25 options.
+const MAX_OPTIONS = 25;
+
+// Show a private dropdown of every rehearsal that hasn't started yet.
 export async function handleRsvp(interaction: ChatInputCommandInteraction) {
-  const rehearsal = await nextRehearsal();
-  if (!rehearsal) {
+  const upcoming = await upcomingRehearsals();
+  if (upcoming.length === 0) {
     await interaction.reply({ content: say("noRehearsal"), flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(RSVP_SELECT_ID)
+    .setPlaceholder("Pick a rehearsal")
+    .addOptions(
+      upcoming
+        .slice(0, MAX_OPTIONS)
+        .map((r) =>
+          new StringSelectMenuOptionBuilder()
+            .setValue(String(r.id))
+            .setLabel(formatWindow(r.startsAt, r.endsAt)),
+        ),
+    );
+
+  await interaction.reply({
+    content: say("rsvpPick"),
+    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+// Opt in to reminders for the picked rehearsal (for anyone who missed the poll), and tell the
+// channel. Someone already on the list gets the private reply only, so repeats don't spam it.
+export async function handleRsvpSelect(interaction: StringSelectMenuInteraction) {
+  // Re-check: the dropdown could outlive the rehearsal being cancelled or starting.
+  const [rehearsal] = await db
+    .select()
+    .from(rehearsals)
+    .where(
+      and(
+        eq(rehearsals.id, Number(interaction.values[0])),
+        eq(rehearsals.status, "scheduled"),
+        gt(rehearsals.startsAt, new Date()),
+      ),
+    );
+  if (!rehearsal) {
+    await interaction.update({ content: say("alreadyGone"), components: [] });
     return;
   }
 
@@ -22,9 +71,9 @@ export async function handleRsvp(interaction: ChatInputCommandInteraction) {
     .returning();
 
   const when = formatWindow(rehearsal.startsAt, rehearsal.endsAt);
-  await interaction.reply({
+  await interaction.update({
     content: say(added.length > 0 ? "rsvpConfirmed" : "rsvpAlready", { when }),
-    flags: MessageFlags.Ephemeral,
+    components: [],
   });
 
   if (added.length > 0) await announceRsvp(interaction, rehearsal, when);
@@ -34,7 +83,7 @@ export async function handleRsvp(interaction: ChatInputCommandInteraction) {
 // and confirmed by now, so this logs failures instead of throwing. The mention shows the
 // person's name without pinging anyone.
 async function announceRsvp(
-  interaction: ChatInputCommandInteraction,
+  interaction: StringSelectMenuInteraction,
   rehearsal: typeof rehearsals.$inferSelect,
   when: string,
 ) {

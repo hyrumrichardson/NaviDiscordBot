@@ -22,7 +22,7 @@ import {
   handleRehearsalModal,
   REHEARSAL_PREFIX,
 } from "./rehearsal.js";
-import { handleRsvp } from "./rsvp.js";
+import { handleRsvp, handleRsvpSelect, RSVP_SELECT_ID } from "./rsvp.js";
 
 export const naviCommand = new SlashCommandBuilder()
   .setName("navi")
@@ -35,7 +35,7 @@ export const naviCommand = new SlashCommandBuilder()
     s.setName("cancel").setDescription("Cancel an upcoming rehearsal or open poll (admin)"),
   )
   .addSubcommand((s) =>
-    s.setName("rsvp").setDescription("Tell the band you're coming to the next rehearsal and get reminders"),
+    s.setName("rsvp").setDescription("Pick a rehearsal to tell the band you're coming and get reminders"),
   )
   .addSubcommand((s) =>
     s
@@ -123,6 +123,7 @@ export async function handleModalSubmit(interaction: ModalSubmitInteraction) {
 export async function handleComponent(interaction: MessageComponentInteraction) {
   const id = interaction.customId;
   if (id.startsWith(REHEARSAL_PREFIX)) return handleRehearsalComponent(interaction);
+  if (interaction.isStringSelectMenu() && id === RSVP_SELECT_ID) return handleRsvpSelect(interaction);
   if (interaction.isButton() && (id.startsWith(PICK_PREFIX) || id.startsWith(DROP_PREFIX))) {
     return handleDecisionButton(interaction);
   }

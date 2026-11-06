@@ -78,6 +78,10 @@ export const copy = {
   noRehearsal: [
     "**Hmm...** There's no rehearsal scheduled yet.",
   ],
+  // Shown above the /navi rsvp dropdown.
+  rsvpPick: [
+    "**Hey!** Which rehearsal are you coming to?",
+  ],
   rsvpAlready: [
     "**Hey!** You're already on the list for **{when}**. I'll remind you!",
   ],
