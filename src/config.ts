@@ -19,7 +19,7 @@ export const config = {
 
   rehearsal: {
     defaultStart: optional("REHEARSAL_DEFAULT_START", "14:00"),
-    defaultHours: Number(optional("REHEARSAL_DEFAULT_HOURS", "3")),
+    defaultHours: Number(optional("REHEARSAL_DEFAULT_HOURS", "2")),
     pollDurationHours: Number(optional("POLL_DURATION_HOURS", "24")),
     reminderHoursBefore: Number(optional("REMINDER_HOURS_BEFORE", "48")),
     dayOfReminderTime: optional("DAY_OF_REMINDER_TIME", "09:00"),

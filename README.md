@@ -32,8 +32,8 @@ Navi's replies to commands are private (only you see them). The poll, its result
 
 1. **A member runs `/navi rehearsal`** and gets a panel only they can see. They become the poll's **creator**.
 2. **They pick up to 10 days** from a dropdown of the next 25 days. Discord has no date-picker component, so the dropdown stands in for a calendar.
-3. **They set a time for each day.** Each day starts at **2:00–5:00 PM**. To change a day, pick it under **Edit time for…**, then choose from the **Time** dropdown:
-   - Presets: 3-hour windows from 10 AM–1 PM through 6–9 PM.
+3. **They set a time for each day.** Each day starts at **2:00–4:00 PM**. To change a day, pick it under **Edit time for…**, then choose from the **Time** dropdown:
+   - Presets: 2-hour windows from 10 AM–12 PM through 6–8 PM.
    - **Custom…** opens a pop-up to type any 1–8 hour window, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime, so `6-9` means evening and `10-1` means late morning.
    - **Use this time for all days** copies the current day's time to every day.
    - Navi won't send a poll with a day that starts before voting ends. The panel lasts 30 minutes, or until the bot restarts.
@@ -41,8 +41,8 @@ Navi's replies to commands are private (only you see them). The poll, its result
    ```
    Hey @Final Bossa Member! When can you make rehearsal? Vote for every time that works. Poll closes in 24 hours.
 
-   1️⃣ Thu, Oct 8, 2:00 – 5:00 PM
-   2️⃣ Sat, Oct 10, 2:00 – 5:00 PM
+   1️⃣ Thu, Oct 8, 2:00 – 4:00 PM
+   2️⃣ Sat, Oct 10, 2:00 – 4:00 PM
    ❌ Can't make any of these
 
    React with the number of every time that works for you.
@@ -52,7 +52,7 @@ Navi's replies to commands are private (only you see them). The poll, its result
    With only one day, the option is 👍 and the message asks *"Can you make it to rehearsal at this time?"*
    Once someone else reacts with an emoji, Navi removes its own reaction from it, so the number Discord shows is the real vote count. If everyone takes their vote back from an emoji, Navi adds that emoji again. Discord puts it at the end of the row. Navi can't do this while it's offline, so it checks every open poll when it starts up and fixes them.
 5. **After 24 hours, Navi counts the reactions** (ignoring its own) and adds *🔒 Voting is closed.* to the poll. Discord can't lock reactions, so later ones are ignored. Then:
-   - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 5:00 PM**"* as a reply to the poll, with a line listing everyone who voted for that time. The names don't ping anyone.
+   - **A clear winner with at least 4 votes**: Navi posts *"Rehearsal will be **Sat, Oct 10, 2:00 – 4:00 PM**"* as a reply to the poll, with a line listing everyone who voted for that time. The names don't ping anyone.
    - **A tie**: Navi DMs the creator one button per tied time.
    - **Fewer than 4 votes** (`MIN_TURNOUT`): Navi DMs the creator to **keep** the time or choose **No rehearsal**.
    - **No votes**: Navi says so in the channel.
@@ -90,7 +90,7 @@ Everything is set in `.env` (copy [`.env.example`](.env.example)). `.env` is nev
 | `ADMIN_ROLE_ID` | blank | The admin role. If blank, admins are people with Manage Server. |
 | `TZ` | `America/Chicago` | The band's time zone. All times are shown in it. |
 | `REHEARSAL_DEFAULT_START` | `14:00` | The time each day starts at in the panel. |
-| `REHEARSAL_DEFAULT_HOURS` | `3` | Rehearsal length, used for the default and the presets. |
+| `REHEARSAL_DEFAULT_HOURS` | `2` | Rehearsal length, used for the default and the presets. |
 | `POLL_DURATION_HOURS` | `24` | How long a poll stays open. |
 | `REMINDER_HOURS_BEFORE` | `48` | When the first reminder goes out. |
 | `DAY_OF_REMINDER_TIME` | `09:00` | When the day-of reminder goes out. |
