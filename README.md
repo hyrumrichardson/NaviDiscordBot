@@ -31,7 +31,7 @@ Navi's replies to commands are private (only you see them). The poll, its result
 ## How a rehearsal poll works
 
 1. **A member runs `/navi rehearsal`** and gets a panel only they can see. They become the poll's **creator**.
-2. **They pick up to 10 days** from a dropdown of the next 25 days. Discord has no date-picker component, so the dropdown stands in for a calendar.
+2. **They pick up to 10 days** from a dropdown of the next 25 days. Discord has no date-picker component, so the dropdown stands in for a calendar. The panel starts with the Saturday and Sunday of the next weekend that has no rehearsal scheduled or open poll on it (and starts after the poll would close) already picked; they can change or clear these.
 3. **They set a time for each day.** Each day starts at **2:00–4:00 PM**. To change a day, pick it under **Edit time for…**, then choose from the **Time** dropdown:
    - Presets: 2-hour windows from 10 AM–12 PM through 6–8 PM.
    - **Custom…** opens a pop-up to type any 1–8 hour window, e.g. `1:30-4:30pm`, `11-2` or `18:00-21:00`. Without am/pm, Navi assumes daytime, so `6-9` means evening and `10-1` means late morning.

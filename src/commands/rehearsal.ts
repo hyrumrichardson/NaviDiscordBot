@@ -14,6 +14,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import { config } from "../config.js";
 import { say } from "../copy.js";
 import { db } from "../db/client.js";
@@ -29,7 +30,7 @@ import {
   zonedDate,
   zonedToUtc,
 } from "../time.js";
-import { CANT_MAKE_EMOJI, POLL_EMOJIS, pollEmoji } from "../rehearsals.js";
+import { CANT_MAKE_EMOJI, POLL_EMOJIS, pollEmoji, upcomingRehearsals } from "../rehearsals.js";
 
 // Component custom IDs: navi-reh:<draftId>:<action>
 export const REHEARSAL_PREFIX = "navi-reh:";
@@ -73,6 +74,48 @@ const defaultWindow = (): DayWindow => ({
 
 const sortedDays = (draft: Draft) => [...draft.days.keys()].sort();
 
+// Dates the day picker offers: tomorrow through PICKER_DAYS days out.
+function pickerDates() {
+  const today = zonedDate(new Date());
+  return Array.from({ length: PICKER_DAYS }, (_, i) => addDays(today, i + 1));
+}
+
+// Days that already have a scheduled rehearsal or an option in a poll that's still open
+// (or waiting on the creator's decision).
+async function takenDates(): Promise<Set<string>> {
+  const now = new Date();
+  const [scheduled, polled] = await Promise.all([
+    upcomingRehearsals(),
+    db
+      .select({ startsAt: pollOptions.startsAt })
+      .from(pollOptions)
+      .innerJoin(rehearsalPolls, eq(pollOptions.pollId, rehearsalPolls.id))
+      .where(
+        and(inArray(rehearsalPolls.status, ["open", "awaiting_decision"]), gt(pollOptions.startsAt, now)),
+      ),
+  ]);
+  return new Set([...scheduled, ...polled].map((r) => zonedDate(r.startsAt)));
+}
+
+// Saturday and Sunday of the next weekend with no rehearsal or open poll on either day, to
+// pre-select in a new panel. Skips weekends that start before the poll would close or that
+// fall outside the picker. Returns [] if no weekend qualifies.
+async function nextOpenWeekend(): Promise<string[]> {
+  const booked = await takenDates();
+  const estimatedClose = Date.now() + config.rehearsal.pollDurationHours * 3_600_000;
+  const dates = pickerDates();
+  const isSaturday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay() === 6;
+
+  for (const saturday of dates.filter(isSaturday)) {
+    const sunday = addDays(saturday, 1);
+    if (!dates.includes(sunday)) break;
+    if (booked.has(saturday) || booked.has(sunday)) continue;
+    if (windowInstants(saturday, defaultWindow()).startsAt.getTime() <= estimatedClose) continue;
+    return [saturday, sunday];
+  }
+  return [];
+}
+
 function windowInstants(date: string, w: DayWindow) {
   const startsAt = zonedToUtc(date, formatMinutes(w.start));
   return { startsAt, endsAt: new Date(startsAt.getTime() + w.length * 60_000) };
@@ -98,15 +141,13 @@ function render(draftId: string, draft: Draft) {
     draft.warning ? `\n${draft.warning}` : "",
   ].join("\n");
 
-  const today = zonedDate(new Date());
-  const pickerDates = Array.from({ length: PICKER_DAYS }, (_, i) => addDays(today, i + 1));
   const daySelect = new StringSelectMenuBuilder()
     .setCustomId(id("days"))
     .setPlaceholder("Pick days")
     .setMinValues(0)
     .setMaxValues(POLL_EMOJIS.length)
     .addOptions(
-      pickerDates.map((date) =>
+      pickerDates().map((date) =>
         new StringSelectMenuOptionBuilder()
           .setValue(date)
           .setLabel(dayLabel(date))
@@ -219,12 +260,13 @@ export async function handleRehearsal(interaction: ChatInputCommandInteraction) 
 
   pruneDrafts();
   const draftId = interaction.id;
+  const defaultDays = await nextOpenWeekend();
   const draft: Draft = {
     channelId: interaction.channelId,
     guildId: interaction.guildId,
     createdBy: interaction.user.id,
-    days: new Map(),
-    editing: null,
+    days: new Map(defaultDays.map((date) => [date, defaultWindow()])),
+    editing: defaultDays[0] ?? null,
     warning: null,
     touchedAt: Date.now(),
   };
