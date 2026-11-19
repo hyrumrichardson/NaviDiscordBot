@@ -72,7 +72,7 @@ If the creator's DMs are closed, the tie or turnout buttons are posted in the ch
 
 [`docs/member-help.txt`](docs/member-help.txt) is **live content**: it's published into Discord rather than copy-pasted.
 - `/navi guide-channel` posts it and stores the message IDs. Running it again with the same channel edits the messages in place. Picking a different channel moves the guide and deletes the old copy.
-- **On every startup**, Navi compares the file with the live messages and edits only what changed. So to update the guide, edit the `.txt` and push. Auto-update restarts the bot, and the guide updates itself.
+- **On every startup**, Navi compares the file with the live messages and edits only what changed. So to update the guide, edit the `.txt` and push. Watchtower restarts the bot with the new image, and the guide updates itself.
 - Long guides are split to stay under Discord's 2000-character limit. Navi splits first at a `━━━━━━━━━━━━━━━━━━━━━━━━` line if there is one, otherwise at line breaks. If someone deletes a guide message by hand, Navi reposts the whole guide so it stays in order.
 
 ---
@@ -139,11 +139,10 @@ Navi's lines lean on Zelda: *"Hey! Listen!"*, *"Watch out!"*, *"Well, excuse me,
 │       └── client.ts       # Postgres pool + migration runner
 ├── docs/member-help.txt    # The command guide posted in Discord (live content)
 ├── drizzle/                # Generated SQL migrations (committed; applied on startup)
-├── scripts/
-│   ├── update.sh           # Unraid: git pull + rebuild + restart
-│   └── auto-update.sh      # Unraid: runs update.sh only when GitHub has new commits
+├── .github/workflows/
+│   └── docker-publish.yml  # Builds the image on push to main and publishes it to GHCR
 ├── Dockerfile
-├── docker-compose.yml      # navi + postgres
+├── docker-compose.yml      # navi (image from GHCR) + postgres
 └── .env.example
 ```
 
@@ -156,7 +155,7 @@ Navi's lines lean on Zelda: *"Hey! Listen!"*, *"Watch out!"*, *"Well, excuse me,
 | Database | PostgreSQL 16 | Polls, votes, rehearsals, reminders and settings |
 | DB access | Drizzle ORM + migrations | Lightweight and typed |
 | Scheduling | Jobs stored in a Postgres table, checked every minute | Reminders still go out after a restart |
-| Hosting | Docker Compose on Unraid | Bot + database in two containers |
+| Hosting | Docker Compose on Unraid, image built by GitHub Actions | Bot + database in two containers; Watchtower keeps the bot current |
 
 ## Data model
 
@@ -206,56 +205,68 @@ Migrations are applied automatically when the bot starts. `npm run db:studio` op
 
 ## Deploying on Unraid
 
-The bot and Postgres run as two containers from `docker-compose.yml`. They're managed by the **Compose Manager** plugin, or by plain `docker compose` over SSH. You'll need `git` on the server (check with `git --version`) and `docker compose` (installed by Compose Manager).
+The bot and Postgres run as two containers from `docker-compose.yml`. They're managed by the **Compose Manager** plugin, or by plain `docker compose` over SSH.
+
+The server doesn't build anything and doesn't need git. Each push to `main` runs [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml). The workflow builds the image and publishes it to GitHub Container Registry as `ghcr.io/hyrumrichardson/navi-discord-bot:latest`, plus a `sha-abc1234` tag for each commit. **Watchtower** sees the new `latest` image and restarts Navi on it. Migrations and the guide sync run on startup as usual. If the build fails (a type error, for example), nothing is published and the running bot isn't touched. Build status is in the repo's **Actions** tab.
+
+### Registry login
+
+The repo is private, so its image is private too. Both the server and Watchtower need a token to pull it.
+
+1. On GitHub, go to **Settings → Developer settings → Personal access tokens → Tokens (classic)** and create a token with only the `read:packages` scope. GHCR doesn't accept fine-grained tokens.
+2. On the server, save the login in appdata. Unraid wipes `/root` on every reboot, so it can't live in the default `~/.docker`:
+   ```bash
+   mkdir -p /mnt/user/appdata/navi/.docker
+   docker --config /mnt/user/appdata/navi/.docker login ghcr.io -u hyrumrichardson
+   # paste the token as the password
+   ```
+3. In Watchtower's container settings, add a **Path** mapping: host `/mnt/user/appdata/navi/.docker/config.json` → container `/config.json`, read-only. Then restart Watchtower.
+
+To skip this step, make the package public instead. Go to the package page on GitHub, then **Package settings → Change visibility**. The image holds the compiled bot and the guide, not `.env`, so no secrets are exposed. Anyone could read the bot's code, though.
+
+### Watchtower settings
+
+- **Poll interval:** Watchtower checks once a day by default. Set `WATCHTOWER_POLL_INTERVAL=300` to make pushes go live within about 5 minutes.
+- **Which containers:** Navi has the label `com.centurylinklabs.watchtower.enable=true`. If Watchtower runs with `WATCHTOWER_LABEL_ENABLE=true`, that label opts Navi in. Postgres is labelled `false`, so Watchtower never restarts the database on its own.
+- **Cleanup:** `WATCHTOWER_CLEANUP=true` deletes the old image after each update, so old builds don't pile up.
 
 ### First install
 
-The repo is private, so the server reads it with a **deploy key**: an SSH key with read-only access to this one repo. It's kept in appdata rather than `/root`, because Unraid wipes `/root` on every reboot.
-
-```bash
-mkdir -p /mnt/user/appdata/navi/.ssh && chmod 700 /mnt/user/appdata/navi/.ssh
-ssh-keygen -t ed25519 -N "" -C "unraid-navi" -f /mnt/user/appdata/navi/.ssh/deploy_key
-cat /mnt/user/appdata/navi/.ssh/deploy_key.pub
-```
-
-Add that public key on GitHub under **Settings → Deploy keys**, with write access off. Then clone, configure and start:
+Make a folder for the stack and put two files from this repo in it: `docker-compose.yml`, and `.env.example` saved as `.env`. You can copy them over the appdata share or paste them into `nano`.
 
 ```bash
 cd /mnt/user/appdata/navi
-SSH_CMD="ssh -i /mnt/user/appdata/navi/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/mnt/user/appdata/navi/.ssh/known_hosts"
-GIT_SSH_COMMAND="$SSH_CMD" git clone git@github.com:hyrumrichardson/NaviDiscordBot.git repo
-git -C repo config core.sshCommand "$SSH_CMD"     # later pulls use the key automatically
-
-cd repo
-cp .env.example .env
 nano .env
 #   Discord values, a real POSTGRES_PASSWORD, and DATA_DIR=/mnt/user/appdata/navi/postgres
-docker compose up -d --build
+DOCKER_CONFIG=/mnt/user/appdata/navi/.docker docker compose up -d
 docker compose logs -f navi     # look for "Hey! Listen! Logged in as …"
 ```
 
-**Compose Manager:** to see the stack in the Docker tab, add a stack named `navi`. Set **Compose Source** to **External folder** → `/mnt/user/appdata/navi/repo`, and **External ENV File Path** to `/mnt/user/appdata/navi/repo/.env`. The compose file sets `name: navi`, so the command line and Compose Manager manage the same stack.
+**Compose Manager:** to see the stack in the Docker tab, add a stack named `navi`. Set **Compose Source** to **External folder** → `/mnt/user/appdata/navi`, and **External ENV File Path** to `/mnt/user/appdata/navi/.env`. The compose file sets `name: navi`, so the command line and Compose Manager manage the same stack.
+
+### Moving from the old git-pull setup
+
+If the server still has the `repo` clone and the `navi-auto-update` User Script, first push this change and wait for the Actions build to go green. Then:
+
+1. Delete the `navi-auto-update` User Script.
+2. Copy `repo/docker-compose.yml` (from this commit or later) and `repo/.env` up into `/mnt/user/appdata/navi`.
+3. Stop the old stack and start the new one. Postgres data stays where it is, because `DATA_DIR` in `.env` is an absolute path:
+   ```bash
+   cd /mnt/user/appdata/navi/repo && docker compose down
+   cd /mnt/user/appdata/navi && DOCKER_CONFIG=/mnt/user/appdata/navi/.docker docker compose up -d
+   ```
+4. Point Compose Manager at `/mnt/user/appdata/navi` (see above).
+5. Delete `/mnt/user/appdata/navi/repo` and `/mnt/user/appdata/navi/.ssh`, and remove the deploy key under the repo's **Settings → Deploy keys** on GitHub.
 
 ### Updating
 
-Run this after pushing changes:
+Push to `main`. Navi restarts on the new image at Watchtower's next check.
 
-```bash
-bash /mnt/user/appdata/navi/repo/scripts/update.sh
-```
-
-It pulls, rebuilds, restarts, and applies any new migrations on startup.
-
-**Auto-update on push.** `scripts/auto-update.sh` checks GitHub and runs `update.sh` only when `main` has new commits. To schedule it, go to **Settings → User Scripts → Add New Script** (the User Scripts plugin is in Apps). Name it `navi-auto-update` and give it this script:
-
-```bash
-#!/bin/bash
-bash /mnt/user/appdata/navi/repo/scripts/auto-update.sh
-```
-
-Set its schedule to **Custom** with `*/5 * * * *`. Each push then goes live within about 5 minutes. When nothing has changed, the script does nothing. If a build fails, the old container keeps running.
-
-**Changing `.env`** needs a recreate, because a plain restart doesn't reload it: `docker compose up -d --force-recreate navi`.
+- **Update right now:** `DOCKER_CONFIG=/mnt/user/appdata/navi/.docker docker compose pull navi && docker compose up -d navi`
+- **Roll back:** change `:latest` in `docker-compose.yml` to an older `:sha-abc1234` tag (listed on the package page), then run `docker compose up -d navi`. Watchtower leaves a pinned tag alone. Set it back to `:latest` to resume updates.
+- **Changes to `docker-compose.yml` or new `.env` variables** aren't picked up by Watchtower, which only swaps the image. Copy them to the server by hand, then run `docker compose up -d`.
+- **Changing `.env`** needs a recreate, because a plain restart doesn't reload it: `docker compose up -d --force-recreate navi`.
+- **Updating Postgres** is up to you: `docker compose pull postgres && docker compose up -d postgres`.
 
 ### Moving Navi to a different server
 
@@ -265,10 +276,10 @@ Set its schedule to **Custom** with `*/5 * * * *`. Each push then goes live with
 4. Run `/navi guide-channel` in the new server, and kick Navi from the old one.
 
 ### Notes
-- Postgres data lives in `DATA_DIR` under appdata, so Unraid's appdata backups include it, along with `.env` and the deploy key.
+- Postgres data lives in `DATA_DIR` under appdata, so Unraid's appdata backups include it, along with `.env` and the registry login.
 - `POSTGRES_PORT` exposes the database on your LAN. Remove the `ports:` block in `docker-compose.yml` if you don't want that.
 - Both containers use `restart: unless-stopped`, so they come back after a reboot.
-- **Later option:** build the image with GitHub Actions and publish it to GitHub Container Registry. Unraid would then just pull it, with no git or build step on the server. This isn't set up.
+- The image is built for `linux/amd64` only. Add `linux/arm64` to `platforms` in the workflow if Navi ever needs to run on ARM.
 
 ---
 
