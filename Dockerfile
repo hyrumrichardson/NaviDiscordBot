@@ -7,6 +7,8 @@ COPY src ./src
 RUN npm run build
 
 FROM node:22-alpine
+# Opt in to Watchtower auto-updates, even when the container isn't started from docker-compose.yml.
+LABEL com.centurylinklabs.watchtower.enable="true"
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
